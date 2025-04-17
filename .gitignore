@@ -1,0 +1,5 @@
+/build/
+/.venv
+*.log
+*.tmp
+*.DS_Store 

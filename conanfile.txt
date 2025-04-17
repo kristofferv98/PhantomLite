@@ -1,0 +1,11 @@
+[requires]
+raylib/4.5
+fmt/10.2.1
+catch2/3.5.1
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[options]
+raylib:shared=False 

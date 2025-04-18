@@ -44,16 +44,19 @@ void PlayerController::init(float start_x, float start_y) {
     
     player_collision_id_ = collision_world_.add_object(player_obj);
     
+    // Initialize health using the atom
+    health_ = atoms::make_health(10); // 10 pips total
+    
     // Tell the world where the player is (for camera)
     world::set_camera_target(movement_.position);
     
-    // Initialize UI to match player max health
-    ui::HeartsController::heal(kMaxHealthPips);
+    // Initialize UI hearts - NOTE: HeartsController::init needs to be added
+    ui::HeartsController::init(health_.max); // Push max health to UI
 }
 
 void PlayerController::update(float dt) {
-    // Don't process input if dead
-    if (dead_) return;
+    // Don't process input if not alive
+    if (!is_alive()) return;
 
     // Save previous movement state for comparison
     bool was_moving = movement_.is_moving;
@@ -146,7 +149,7 @@ void PlayerController::render() {
     Vector2 screen_pos = world::world_to_screen(movement_.position);
     
     // Draw player sprite centered on position with appropriate color
-    Color player_color = dead_ ? GRAY : WHITE;
+    Color player_color = is_alive() ? WHITE : GRAY; // Use is_alive() for color
     
     DrawTextureV(texture, 
                 Vector2{screen_pos.x - texture.width / 2.0f, 
@@ -154,7 +157,7 @@ void PlayerController::render() {
                 player_color);
     
     // Draw health bar above player
-    float health_percent = (float)health_pips_ / kMaxHealthPips;
+    float health_percent = static_cast<float>(health_.current) / health_.max;
     Rectangle health_bar = {
         screen_pos.x - 25, // Center the health bar
         screen_pos.y - texture.height/2 - 10, // Position above player
@@ -217,6 +220,11 @@ Vector2 PlayerController::get_position() const {
 
 void PlayerController::update_animation_state() {
     // Set animation state based on current actions and movement
+    if (!is_alive()) {
+        atoms::set_animation_state(animation_, PlayerState::IDLE); // Show idle when dead
+        return;
+    }
+    
     if (actions_.attacking) {
         atoms::set_animation_state(animation_, PlayerState::ATTACKING);
     } else if (movement_.is_moving) {
@@ -265,10 +273,15 @@ void PlayerController::create_test_obstacles() {
 }
 
 bool PlayerController::take_damage(int pips, Vector2 knockback_dir) {
-    // Ignore damage if already dead
-    if (dead_) return false;
+    // Apply damage using the health atom
+    // This returns false if the player was already dead
+    if (!atoms::apply_damage(health_, pips)) {
+        return false; // Already dead, no damage applied
+    }
     
-    // Calculate knockback force (force proportional to damage)
+    // Player was alive, damage was applied
+    
+    // Calculate knockback force
     Vector2 knockback = {
         knockback_dir.x * 5.0f,
         knockback_dir.y * 5.0f
@@ -278,27 +291,30 @@ bool PlayerController::take_damage(int pips, Vector2 knockback_dir) {
     movement_.position.x += knockback.x;
     movement_.position.y += knockback.y;
     
-    // Reduce health
-    health_pips_ = std::max(0, health_pips_ - pips);
-    
-    // Update UI
+    // Update UI - Tell the UI controller about the damage
     ui::HeartsController::take_damage(pips);
     
     // Log the damage
     TraceLog(LOG_INFO, "Player took %d damage with knockback (%.2f, %.2f)",
              pips, knockback.x, knockback.y);
     TraceLog(LOG_INFO, "Player health reduced to %d/%d", 
-             health_pips_, kMaxHealthPips);
+             health_.current, health_.max);
     
-    // Check for death
-    if (health_pips_ <= 0) {
-        dead_ = true;
-        // Could trigger death animation here
-        atoms::set_animation_state(animation_, PlayerState::IDLE);
-        // Disable input handling in update method
+    // Check if player just died
+    if (!is_alive()) {
+        TraceLog(LOG_INFO, "Player has died!");
+        // Could trigger death animation etc. (handled in update_animation_state)
     }
     
-    return true;
+    return true; // Damage was successfully applied
+}
+
+int PlayerController::get_health() const {
+    return health_.current;
+}
+
+bool PlayerController::is_alive() const {
+    return atoms::is_alive(health_);
 }
 
 bool PlayerController::is_attacking() const {
@@ -336,6 +352,10 @@ Rectangle PlayerController::get_attack_rect() const {
     }
     
     return attack_rect;
+}
+
+int PlayerController::get_max_health() const {
+    return health_.max;
 }
 
 } // namespace molecules

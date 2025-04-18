@@ -65,4 +65,33 @@ int get_health() {
     return 0;
 }
 
+int get_max_health() {
+    if (controller) {
+        return controller->get_max_health();
+    }
+    return 10; // Default max health as fallback
+}
+
+bool is_alive() {
+    if (controller) {
+        return controller->is_alive();
+    }
+    return false; // If no controller, consider player dead
+}
+
+Rectangle get_attack_rect() {
+    if (controller) {
+        return controller->get_attack_rect();
+    }
+    // Return a default rectangle as fallback
+    return {0, 0, 0, 0};
+}
+
+bool is_attacking() {
+    if (controller) {
+        return controller->is_attacking();
+    }
+    return false;
+}
+
 }  // namespace player 

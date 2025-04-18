@@ -6,6 +6,9 @@ namespace ui {
 /// HeartsController: Static methods to control the player's heart display
 class HeartsController {
 public:
+    /// Initialize the Hearts UI with max health
+    static void init(int max_pips);
+
     /// Take damage, reducing current health
     static void take_damage(int pips);
     

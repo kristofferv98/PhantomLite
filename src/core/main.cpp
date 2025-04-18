@@ -32,8 +32,10 @@ int main() {
         // Update world first (background)
         world::update(dt);
         
-        // Update player
-        player::update(dt);
+        // Update player (only if alive)
+        if (player::is_alive()) {
+             player::update(dt);
+        }
         
         // Update enemies after player
         enemy::update_enemies(dt);
@@ -41,28 +43,26 @@ int main() {
         // Update UI last
         ui::update_ui(dt);
         
-        // Check if player is dead
-        if (player::get_health() <= 0) {
-            // Player is dead, could show game over screen
-            // For now, just continue to show the dead player
+        // Check if player is alive (for game logic like game over)
+        if (!player::is_alive()) {
+            // Player is dead, could show game over screen or other logic
+            // Input is already disabled in player::update
         }
         
-        // Check for collisions between player weapon (attack) and enemies
-        // This would normally be integrated into a proper collision system
-        if (IsKeyPressed(KEY_SPACE)) {
-            // Simulate a player attack with a hit rect in front of the player
-            Vector2 player_pos = player::get_position();
-            Rectangle hit_rect = {player_pos.x - 16, player_pos.y - 16, 32, 32};
+        // Handle player attack input (only if alive)
+        if (player::is_alive() && IsKeyPressed(KEY_SPACE)) {
+            // Get player attack rectangle
+            Rectangle attack_rect = player::get_attack_rect();
             
             // Create a hit
             enemy::Hit hit = {
                 .dmg = 1,
-                .knockback = {10.0f, 0.0f},
+                .knockback = {10.0f, 0.0f}, // TODO: Make knockback based on player facing
                 .type = enemy::Hit::Type::Melee
             };
             
             // Check for enemy hits
-            if (enemy::hit_enemy_at(hit_rect, hit)) {
+            if (enemy::hit_enemy_at(attack_rect, hit)) {
                 TraceLog(LOG_INFO, "Player hit an enemy!");
             }
         }
@@ -108,16 +108,17 @@ int main() {
         }
         
         // Draw controls help
-        DrawText("Controls: WASD = Move, SPACE = Attack", 
-                 GetScreenWidth() - 350, 10, 10, WHITE);
+        DrawText("Controls: Arrows = Move, SPACE = Attack", 
+                 10, GetScreenHeight() - 30, 20, RAYWHITE);
         DrawText("D = Toggle Debug Info, S = Spawn Slime", 
-                 GetScreenWidth() - 350, 25, 10, WHITE);
+                 10, GetScreenHeight() - 55, 20, RAYWHITE);
         
-        // Show player position for debugging
+        // Show player health and position for debugging
         Vector2 player_pos = player::get_position();
-        char position_text[64];
-        sprintf(position_text, "Player Pos: (%.0f, %.0f)", player_pos.x, player_pos.y);
-        DrawText(position_text, 10, 30, 10, WHITE);
+        char debug_text[128];
+        snprintf(debug_text, sizeof(debug_text), "Player Pos: (%.0f, %.0f) Health: %d/%d", 
+                 player_pos.x, player_pos.y, player::get_health(), player::get_max_health());
+        DrawText(debug_text, 10, 10, 20, WHITE);
         
         EndDrawing();
     }

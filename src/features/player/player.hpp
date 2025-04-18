@@ -25,11 +25,14 @@ void cleanup();
 // Get the player's current position
 Vector2 get_position();
 
-// Apply damage to the player and knockback
-bool take_damage(int pips, Vector2 knockback_dir);
-
 // Get the player's health
 int get_health();
+
+// Get the player's maximum health
+int get_max_health();
+
+// Check if the player is alive
+bool is_alive();
 
 // Get the player's attack rect when attacking
 Rectangle get_attack_rect();

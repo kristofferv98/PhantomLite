@@ -4,6 +4,7 @@
 #include "../atoms/animation.hpp"
 #include "../atoms/actions.hpp"
 #include "../atoms/collision.hpp"
+#include "../atoms/health.hpp"
 
 namespace player {
 namespace molecules {
@@ -31,11 +32,17 @@ public:
     // Get player position
     Vector2 get_position() const;
     
-    // Apply knockback force to player
+    // Apply damage and knockback force to player
     bool take_damage(int pips, Vector2 knockback_dir);
     
     // Get current health
-    int get_health() const { return health_pips_; }
+    int get_health() const;
+    
+    // Get maximum health
+    int get_max_health() const;
+    
+    // Check if player is alive
+    bool is_alive() const;
     
     bool is_attacking() const;
     Rectangle get_attack_rect() const;
@@ -46,12 +53,8 @@ private:
     atoms::AnimationSystem animation_;
     atoms::ActionState actions_;
     atoms::CollisionWorld collision_world_;
+    atoms::Health health_;
     int player_collision_id_ = -1;
-    
-    // Player health tracking
-    int health_pips_ = 10;
-    static constexpr int kMaxHealthPips = 10;
-    bool dead_ = false;
     
     // Debug flags
     bool show_collision_shapes_ = true;

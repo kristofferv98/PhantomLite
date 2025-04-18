@@ -52,6 +52,12 @@ struct EnemySpec {
     std::array<BehaviorAtom, 3> behaviors; ///< Behavior atoms used
     std::array<DropChance, 2> drops;  ///< Possible drops
     int animation_frames;             ///< Number of animation frames
+    float radius;                     ///< Collision radius
+    float width;                      ///< Sprite width
+    float height;                     ///< Sprite height
+    float detection_radius;           ///< Distance to detect player
+    float attack_radius;              ///< Distance to attack player
+    float attack_cooldown;            ///< Time between attacks (seconds)
 };
 
 /// Enemy instance - dynamic data for a specific enemy
@@ -105,5 +111,42 @@ void cleanup_enemies();
 
 /// Get the slime enemy specification
 const EnemySpec& get_slime_spec();
+
+/// Forward declarations 
+struct Enemy;
+enum class BehaviorState;
+
+/// Get the enemy specification
+EnemySpec get_enemy_spec();
+
+/// Initialize the enemy system
+void init();
+
+/// Update all enemies
+void update(float delta_time);
+
+/// Render all enemies
+void render();
+
+/// Cleanup resources
+void cleanup();
+
+/// Check if an enemy is colliding with the player
+bool check_player_collision(Vector2 position, float radius, int* enemy_id = nullptr);
+
+/// Enemy takes damage
+void take_damage(int enemy_id, int damage);
+
+/// Toggle debug visualization
+void toggle_debug();
+
+/// Set debug visualization state
+void set_debug(bool enabled);
+
+/// Get debug visualization state
+bool is_debug_enabled();
+
+/// Get number of active enemies
+int get_enemy_count();
 
 } // namespace enemy 

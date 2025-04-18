@@ -15,10 +15,20 @@ find_package(Catch2 REQUIRED)
 # Include dirs
 include_directories(${raylib_INCLUDE_DIRS} ${fmt_INCLUDE_DIRS} ${Catch2_INCLUDE_DIRS})
 
-# Asset conversion - run svg to png conversion script
+# Get absolute paths for scripts to avoid issues with spaces in paths
+set(CONVERT_SVGS_SCRIPT "${CMAKE_SOURCE_DIR}/tools/convert_svgs.sh")
+set(LINK_ASSETS_SCRIPT "${CMAKE_SOURCE_DIR}/tools/link_assets.sh")
+set(BUILD_DIR "${CMAKE_BINARY_DIR}")
+
+# Create a temporary script to execute the asset conversion to avoid shell escaping issues
+file(WRITE "${CMAKE_BINARY_DIR}/run_asset_scripts.sh" "#!/bin/bash\n")
+file(APPEND "${CMAKE_BINARY_DIR}/run_asset_scripts.sh" "\"${CONVERT_SVGS_SCRIPT}\"\n")
+file(APPEND "${CMAKE_BINARY_DIR}/run_asset_scripts.sh" "\"${LINK_ASSETS_SCRIPT}\" \"${BUILD_DIR}\"\n")
+execute_process(COMMAND chmod +x "${CMAKE_BINARY_DIR}/run_asset_scripts.sh")
+
+# Asset conversion - use the temporary script that has proper path handling
 add_custom_target(assets
-    COMMAND ${CMAKE_SOURCE_DIR}/tools/convert_svgs.sh
-    COMMAND ${CMAKE_SOURCE_DIR}/tools/link_assets.sh ${CMAKE_BINARY_DIR}
+    COMMAND "${CMAKE_BINARY_DIR}/run_asset_scripts.sh"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Converting SVG assets to PNG and creating symlink..."
 )

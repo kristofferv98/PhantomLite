@@ -21,6 +21,10 @@ void add_enemy(const EnemyRuntime& enemy);
 /// Get all active enemy instances
 const std::vector<EnemyRuntime>& get_enemies();
 
+/// Get a mutable reference to all enemy instances
+/// This should be used carefully, only when direct modifications are necessary
+std::vector<EnemyRuntime>& get_enemies_mutable();
+
 /// Remove inactive or dead enemies
 void cleanup_inactive_enemies();
 

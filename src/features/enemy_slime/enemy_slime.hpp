@@ -5,7 +5,6 @@
 #include "raylib.h"
 #include "features/enemies/types.hpp"
 #include <vector>
-#include <array>
 
 namespace enemy {
 
@@ -36,6 +35,9 @@ void spawn_demo_slimes(int count);
 
 /// Toggle visibility of debug information
 void toggle_debug_info();
+
+/// Toggle steering debug visualization (ray weights)
+void toggle_steering_debug();
 
 /// Process a hit on an enemy at the given position, returns true if hit successful
 bool hit_enemy_at(const Rectangle& hit_rect, const Hit& hit);
@@ -72,6 +74,9 @@ void set_debug(bool enabled);
 
 /// Get debug visualization state
 bool is_debug_enabled();
+
+/// Get steering debug visualization state
+bool is_steering_debug_enabled();
 
 /// Get number of active enemies
 int get_enemy_count();

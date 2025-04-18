@@ -71,56 +71,63 @@ Each dungeon awards one Obelisk Shard and a new gameplay mechanic.
 
 ### 5.1 Data Columns
 
-| Col        | Meaning                                                      |
-|------------|--------------------------------------------------------------|
-| **ID**     | Unique code used in spawn JSON & enum (e.g. `FOR_SLIME`)     |
-| **Size**   | Collision box (tiles)                                       |
-| **HP**     | Heart pips                                                  |
-| **DMG**    | Damage per hit (pips)                                      |
-| **Speed**  | px/s (walk); dash speed where applicable                   |
-| **AI Atoms**| Composed behaviour modules (see §5.2)                       |
-| **Drops**  | Probability list (Heart, Coin, LootID)                     |
-| **Sprite** | PNG atlas path (`sprites/<biome>/<id>.png`)                |
-| **Frames** | idle/walk/attack/death frame counts                         |
+| Col                 | Meaning                                                                 |
+|---------------------|-------------------------------------------------------------------------|
+| **ID**              | Unique code used in spawn JSON & enum (e.g. `FOR_SLIME`)                |
+| **hp**              | Health in heart‑pips                                                   |
+| **dmg**             | Damage per hit (pips)                                                   |
+| **speed**           | Movement speed in px/s                                                  |
+| **radius**          | Collision radius in px (half of sprite size)                            |
+| **width**,**height**| Sprite dimensions in px                                                 |
+| **detection_radius**| Distance at which AI switches to chase state (in px)                    |
+| **attack_radius**   | Distance at which AI may attack (in px)                                 |
+| **attack_cooldown** | Seconds between attacks                                                 |
+| **AI Atoms**        | Composed behaviour modules (see §5.2)                                   |
+| **Drops**           | Probability list (Heart, Coin, LootID) — handled by `pickup::spawn_item`|
+| **Sprite**          | PNG atlas path (`sprites/<biome>/<id>.png`)                             |
+| **Frames**          | idle/walk/attack/death frame counts                                     |
 
 ### 5.2 Behaviour Atom Library
 
-| Atom             | Description                                                |
-|------------------|------------------------------------------------------------|
-| `wander_random`  | Move to random point within radius; idle 1 s between moves. |
-| `chase_player`   | If player within 8 tiles and line‑of‑sight → pursue.       |
-| `ranged_shoot`   | Fire projectile on cooldown.                              |
-| `charge_dash`    | Telegraph 0.3 s → dash at 400 px/s for 0.5 s.              |
-| `armor_gate`     | Ignore `Hit` unless weak‑spot active.                     |
-| `dead_poof`      | Spawn 6 particles; play SFX `enemy_die.wav`.              |
+| Atom             | Description                                                   |
+|------------------|---------------------------------------------------------------|
+| `wander_random`  | Meander within radius; idle between moves                     |
+| `chase_player`   | Pursue player when within `detection_radius`                  |
+| `attack_player`  | Deal damage and knockback when within `attack_radius`         |
+| `ranged_shoot`   | Fire projectile on cooldown                                   |
+| `charge_dash`    | Telegraph then dash; obeys its own cooldown                   |
+| `armor_gate`     | Ignore incoming Hits unless weak‑spot active                  |
+| `dead_poof`      | Spawn particles + SFX on death                                |
+
+*Implementation notes:*  
+- All atoms live in `enemy::atoms` and carry a `// PERF:` comment benchmarking their hot‑path cost.  
+- Drops invoke `pickup::spawn_item(type, position)` instead of simple logs.  
 
 ### 5.3 Biome × Enemy Table (excerpt)
 
-| Biome | ID          | Size | HP | DMG | Speed | AI Atoms                         | Drops                        | Sprite                     | Frames   |
-|-------|-------------|------|----|-----|-------|----------------------------------|------------------------------|----------------------------|----------|
-| FOR   | FOR_SLIME   | 1×1  | 2  | 1   | 60    | wander_random + chase_player     | 30 % heart, 70 % coin        | `sprites/for/slime.png`    | 1/4/0/4  |
-| FOR   | FOR_BOAR    | 1×1  | 3  | 2   | 140   | charge_dash                      | 50 % coin                    | `sprites/for/boar.png`     | 1/4/0/4  |
-| CAV   | CAV_BAT     | 1×1  | 1  | 1   | 120   | wander_random + chase_player     | 20 % heart                   | `sprites/cav/bat.png`      | 1/4/0/4  |
-| DES   | DES_SCARAB  | 1×1  | 1  | 1   | 90    | wander_random                    | 15 % coin                    | `sprites/des/scarab.png`   | 1/4/0/4  |
-| SNW   | SNW_WOLF    | 1×1  | 2  | 2   | 150   | charge_dash                      | 40 % heart                   | `sprites/snw/wolf.png`     | 1/4/0/4  |
-| RUN   | RUN_DRONE   | 1×1  | 2  | 1   | 80    | ranged_shoot                     | 10 % shard                   | `sprites/run/drone.png`    | 1/2/1/4  |
+| Biome | ID        | hp | dmg | speed | radius | AI Atoms                       | Drops                  | Sprite                  | Frames |
+|-------|-----------|----|-----|-------|--------|--------------------------------|------------------------|-------------------------|--------|
+| FOR   | FOR_SLIME | 2  | 1   | 60    | 16     | wander_random + chase_player + attack_player | 30 % Heart, 70 % Coin | `sprites/for/slime.png` | 1/4/0/4 |
 
-> _Full enemy roster (including mini‑bosses and elites) in_ `docs/enemies.csv`.
+> _Full roster in_ `docs/enemies.csv`.
 
 ---
 
-## 6 ▸ JSON Spawn Schema (v0.2)
+## 6 ▸ Spawn Pipeline & JSON Schema
+
+We now have **one** authoritative loader in `features/world/atoms/spawn_loader.cpp` that:
+
+1. Parses level JSON files matching this schema  
+2. Emits a list of `{ id: EnemyID, x: float, y: float, respawnable: bool }`  
+3. Handed off to the **enemies manager** which delegates to each slice’s `spawn_<type>()`
+
 ```json
 {
   "spawns": [
-    { "id": "FOR_SLIME", "x": 12, "y": 7, "respawnable": true }
+    { "id": "FOR_SLIME", "x": 12.0, "y": 7.5, "respawnable": true },
+    { "id": "FOR_BOAR",  "x": 24.0, "y": 5.0, "respawnable": false }
   ]
 }
-```
-Parser: `world/atoms/spawn_loader.cpp`  
-Test: `tests/world/test_spawn.cpp`
-
----
 
 ## 7 ▸ Hit & Damage Interface
 ```cpp

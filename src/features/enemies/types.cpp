@@ -1,6 +1,8 @@
 /// types.cpp — Implementation of common enemy data structures
 
 #include "types.hpp"
+#include "../world/world.hpp"
+#include <cmath>
 #include <algorithm>
 
 namespace enemies {
@@ -11,7 +13,7 @@ EnemyRuntime::EnemyRuntime(const EnemyStats& spec_ref, Vector2 pos)
       position(pos), 
       hp(spec_ref.hp), 
       collision_rect({pos.x - spec_ref.size.x/2, pos.y - spec_ref.size.y/2, spec_ref.size.x, spec_ref.size.y}),
-      color(WHITE),
+      color(GREEN),
       facing(Facing::DOWN),
       active(true),
       anim_timer(0.0f),
@@ -36,6 +38,10 @@ EnemyRuntime::EnemyRuntime(const EnemyStats& spec_ref, Vector2 pos)
     // Initialize new noise-based wander
     wander_noise.spawn_point = pos;
     
+    // Initialize with random noise offsets
+    wander_noise.noise_offset_x = static_cast<float>(rand()) / RAND_MAX * 1000.0f;
+    wander_noise.noise_offset_y = static_cast<float>(rand()) / RAND_MAX * 1000.0f;
+    
     // Initialize weights array to zeros
     reset_weights();
 }
@@ -48,15 +54,18 @@ void EnemyRuntime::on_hit(const Hit& hit) {
     // Apply damage
     hp -= hit.dmg;
     
-    // Apply knockback
-    position.x += hit.knockback.x;
-    position.y += hit.knockback.y;
+    // Apply knockback if any
+    if (hit.knockback.x != 0 || hit.knockback.y != 0) {
+        // Simple knockback - could be more complex with physics
+        position.x += hit.knockback.x * 10.0f;
+        position.y += hit.knockback.y * 10.0f;
+        
+        // Update collision rectangle
+        collision_rect.x = position.x - spec->size.x/2;
+        collision_rect.y = position.y - spec->size.y/2;
+    }
     
-    // Update collision rectangle after knockback
-    collision_rect.x = position.x - spec->size.x/2;
-    collision_rect.y = position.y - spec->size.y/2;
-    
-    // Flash red briefly
+    // Flash color to indicate hit
     color = RED;
     
     // TODO: Special reactions based on hit type
@@ -71,6 +80,12 @@ void EnemyRuntime::on_hit(const Hit& hit) {
             
         default:
             break;
+    }
+    
+    // Check if dead
+    if (hp <= 0) {
+        // Mark as inactive
+        active = false;
     }
 }
 

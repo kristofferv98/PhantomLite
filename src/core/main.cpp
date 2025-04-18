@@ -87,6 +87,11 @@ int main() {
             show_debug = !show_debug;
         }
         
+        // Toggle steering debug visualization with F key (only if debug is enabled)
+        if (show_debug && IsKeyPressed(KEY_F)) {
+            enemy::toggle_steering_debug();
+        }
+        
         // Spawn more slimes with S key
         if (IsKeyPressed(KEY_S)) {
             // Get world dimensions

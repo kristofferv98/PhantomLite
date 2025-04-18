@@ -35,6 +35,10 @@ static std::vector<EnemyInstance> slimes;
 // Animation frame time
 static const float ANIMATION_FRAME_TIME = 0.25f; // Seconds per frame
 
+// Texture for slime sprites
+static Texture2D slime_texture;
+static Texture2D slime_squash_texture;
+
 // Constructor implementation for EnemyInstance
 EnemyInstance::EnemyInstance(const EnemySpec& spec_ref, Vector2 pos)
     : spec(&spec_ref), 
@@ -54,6 +58,10 @@ EnemyInstance::EnemyInstance(const EnemySpec& spec_ref, Vector2 pos)
 void init_enemies() {
     // Clear any existing enemies
     slimes.clear();
+    
+    // Load enemy textures
+    slime_texture = LoadTexture("assets/sprites/slime.png");
+    slime_squash_texture = LoadTexture("assets/sprites/slime_squash.png");
     
     // Set random seed for reproducible behavior
     srand(42);
@@ -197,7 +205,7 @@ void render_enemies() {
         // Convert world position to screen position for rendering
         Vector2 screen_pos = world::world_to_screen(enemy.position);
         
-        // Calculate the destination rectangle (square-shaped like other slimes)
+        // Calculate the destination rectangle
         Rectangle dest = {
             screen_pos.x - enemy.spec->size.x/2,
             screen_pos.y - enemy.spec->size.y/2,
@@ -205,57 +213,20 @@ void render_enemies() {
             enemy.spec->size.y
         };
         
-        Color slime_color = enemy.attack.attacking ? 
+        // Choose texture based on animation frame and movement
+        Texture2D current_texture = enemy.is_moving && enemy.anim_frame == 1 ? 
+            slime_squash_texture : slime_texture;
+        
+        // Apply tint based on state (attacking or normal)
+        Color tint = enemy.attack.attacking ? 
             Color{255, 150, 150, 255} : // Light red tint for attacking
-            Color{150, 255, 150, 255};  // Light green tint for normal state
+            WHITE;                      // Normal color for idle state
         
-        // Draw a square base to match the pixel art style of other slimes
-        DrawRectangleRec(dest, slime_color);
-        
-        // Draw pixelated details to make it look like a slime
-        
-        // Draw outline
-        DrawRectangleLinesEx(dest, 1.0f, BLACK);
-        
-        // Draw eyes (two small squares)
-        float eye_size = dest.width * 0.15f;
-        float eye_y = dest.y + dest.height * 0.3f;
-        
-        // Left eye
-        DrawRectangle(
-            static_cast<int>(dest.x + dest.width * 0.25f - eye_size/2),
-            static_cast<int>(eye_y),
-            static_cast<int>(eye_size),
-            static_cast<int>(eye_size),
-            BLACK
-        );
-        
-        // Right eye
-        DrawRectangle(
-            static_cast<int>(dest.x + dest.width * 0.75f - eye_size/2),
-            static_cast<int>(eye_y),
-            static_cast<int>(eye_size),
-            static_cast<int>(eye_size),
-            BLACK
-        );
-        
-        // Draw mouth
-        float mouth_width = dest.width * 0.4f;
-        float mouth_height = dest.height * 0.1f;
-        DrawRectangle(
-            static_cast<int>(dest.x + dest.width * 0.3f),
-            static_cast<int>(dest.y + dest.height * 0.6f),
-            static_cast<int>(mouth_width),
-            static_cast<int>(mouth_height),
-            BLACK
-        );
-        
-        // If it's moving, add some animation by adjusting the height slightly
-        if (enemy.is_moving && enemy.anim_frame == 1) {
-            // Squash effect for the second frame
-            dest.y += dest.height * 0.1f;
-            dest.height *= 0.9f;
-        }
+        // Draw the slime with proper texture
+        DrawTexture(current_texture, 
+                   static_cast<int>(dest.x),
+                   static_cast<int>(dest.y),
+                   tint);
         
         // Draw health indicator above slime
         float health_percent = static_cast<float>(enemy.hp) / static_cast<float>(enemy.spec->hp);
@@ -364,7 +335,11 @@ bool hit_enemy_at(const Rectangle& hit_rect, const Hit& hit) {
 }
 
 void cleanup_enemies() {
-    // Clear all enemies
+    // Unload textures to prevent memory leaks
+    UnloadTexture(slime_texture);
+    UnloadTexture(slime_squash_texture);
+    
+    // Clear slimes list
     slimes.clear();
 }
 

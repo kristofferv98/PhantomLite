@@ -6,6 +6,7 @@
 #include "features/world/world.hpp"
 #include "features/ui/ui.hpp"
 #include "features/enemy_slime/enemy_slime.hpp"
+#include "features/player/molecules/hearts_controller.hpp"
 
 int main() {
     SetTraceLogLevel(LOG_INFO);

@@ -27,7 +27,13 @@ static const EnemySpec SLIME_SPEC = {
     .speed = 60.0f,          // 60 pixels per second
     .behaviors = {BehaviorAtom::wander_random, BehaviorAtom::chase_player, BehaviorAtom::attack_player},
     .drops = {DropChance{DropType::Heart, 30}, DropChance{DropType::Coin, 70}},
-    .animation_frames = 2     // Slime has 2 animation frames
+    .animation_frames = 2,    // Slime has 2 animation frames
+    .radius = 16.0f,         // Collision radius (half of size)
+    .width = 32.0f,          // Sprite width
+    .height = 32.0f,         // Sprite height
+    .detection_radius = 200.0f, // Detection radius for chase behavior
+    .attack_radius = 50.0f,   // Attack radius
+    .attack_cooldown = 1.2f   // Attack cooldown in seconds
 };
 
 // Storage for all active slime instances
@@ -39,6 +45,9 @@ static const float ANIMATION_FRAME_TIME = 0.25f; // Seconds per frame
 // Texture for slime sprites
 static Texture2D slime_texture;
 static Texture2D slime_squash_texture;
+
+// Debug visualization flag
+static bool show_debug = false;
 
 // Constructor implementation for EnemyInstance
 EnemyInstance::EnemyInstance(const EnemySpec& spec_ref, Vector2 pos)
@@ -56,7 +65,7 @@ EnemyInstance::EnemyInstance(const EnemySpec& spec_ref, Vector2 pos)
       is_moving(false) {}
 
 // Initialize the enemy system
-void init_enemies() {
+void init() {
     // Clear any existing enemies
     slimes.clear();
     
@@ -66,6 +75,9 @@ void init_enemies() {
     
     // Set random seed for reproducible behavior
     srand(42);
+    
+    // Reset debug state
+    show_debug = false;
 }
 
 // PERF: ~0.05-0.5ms depending on enemy count
@@ -164,34 +176,144 @@ void spawn_demo_slimes(int count) {
     
     TraceLog(LOG_INFO, "spawn_demo_slimes: Spawning %d slimes", count);
     
-    // Get player position as center for spawning
+    // Get player position
     Vector2 player_pos = get_player_position();
     TraceLog(LOG_INFO, "Player position: (%.2f, %.2f)", player_pos.x, player_pos.y);
     
-    // Spawn slimes in a circle around the player
-    for (int i = 0; i < count; i++) {
-        // Calculate position in a circle around the player
-        float angle = (360.0f / count) * i * DEG2RAD;
-        float distance = 150.0f;  // 150 pixels from the player
+    // Get world bounds for spawning
+    float min_x, min_y, max_x, max_y;
+    world::get_world_bounds(&min_x, &min_y, &max_x, &max_y);
+    
+    // Create a random number generator
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    
+    // Define area parameters
+    float min_distance = 150.0f;  // Minimum distance from player
+    float max_distance = 600.0f;  // Maximum distance from player (expanded for more spread)
+    float margin = 100.0f;        // Margin from map edges
+    
+    // Setup random distributions
+    std::uniform_real_distribution<float> dis_x(min_x + margin, max_x - margin);
+    std::uniform_real_distribution<float> dis_y(min_y + margin, max_y - margin);
+    
+    // Count of successfully spawned slimes
+    int spawned = 0;
+    
+    // Maximum spawn attempts to prevent infinite loops
+    int max_attempts = count * 5;
+    int attempts = 0;
+    
+    while (spawned < count && attempts < max_attempts) {
+        // Try two different spawn methods with equal probability
+        std::uniform_int_distribution<int> spawn_method(0, 1);
+        Vector2 pos;
         
-        Vector2 pos = {
-            player_pos.x + cos(angle) * distance,
-            player_pos.y + sin(angle) * distance
-        };
+        if (spawn_method(gen) == 0) {
+            // Method 1: Random position in world bounds
+            pos.x = dis_x(gen);
+            pos.y = dis_y(gen);
+        } else {
+            // Method 2: Random direction from player with variable distance
+            std::uniform_real_distribution<float> dis_angle(0.0f, 2.0f * PI);
+            std::uniform_real_distribution<float> dis_radius(min_distance, max_distance);
+            
+            float angle = dis_angle(gen);
+            float distance = dis_radius(gen);
+            
+            pos.x = player_pos.x + cosf(angle) * distance;
+            pos.y = player_pos.y + sinf(angle) * distance;
+            
+            // Clamp to world bounds
+            pos.x = fmaxf(min_x + margin, fminf(max_x - margin, pos.x));
+            pos.y = fmaxf(min_y + margin, fminf(max_y - margin, pos.y));
+        }
         
-        TraceLog(LOG_INFO, "Spawning slime %d at position: (%.2f, %.2f)", i, pos.x, pos.y);
-        spawn_slime(pos);
+        // Verify position is valid
+        bool valid_position = false;
+        
+        // Check distance from player (not too close)
+        float dist_to_player = sqrtf(powf(pos.x - player_pos.x, 2) + powf(pos.y - player_pos.y, 2));
+        if (dist_to_player >= min_distance) {
+            // Check if position is walkable (not in water or obstacles)
+            if (world::is_walkable(pos.x, pos.y)) {
+                // Check distance from other slimes to avoid overlap
+                bool too_close_to_other_slime = false;
+                for (const auto& enemy : slimes) {
+                    float dist = sqrtf(powf(pos.x - enemy.position.x, 2) + powf(pos.y - enemy.position.y, 2));
+                    if (dist < 50.0f) { // Minimum spacing between slimes
+                        too_close_to_other_slime = true;
+                        break;
+                    }
+                }
+                
+                if (!too_close_to_other_slime) {
+                    valid_position = true;
+                }
+            }
+        }
+        
+        if (valid_position) {
+            TraceLog(LOG_INFO, "Spawning slime %d at position: (%.2f, %.2f)", spawned, pos.x, pos.y);
+            spawn_slime(pos);
+            spawned++;
+        }
+        
+        attempts++;
+    }
+    
+    // If we didn't spawn enough slimes, use the fallback method
+    if (spawned < count) {
+        TraceLog(LOG_WARNING, "Could only spawn %d/%d slimes with random placement, using fallback", spawned, count);
+        
+        // Use circular pattern for remaining slimes
+        for (int i = spawned; i < count; i++) {
+            // Distribute remaining slimes in a circle
+            float angle = (360.0f / (count - spawned)) * (i - spawned) * DEG2RAD;
+            float distance = 200.0f;
+            
+            Vector2 pos;
+            pos.x = player_pos.x + cosf(angle) * distance;
+            pos.y = player_pos.y + sinf(angle) * distance;
+            
+            // Clamp to world bounds
+            pos.x = fmaxf(min_x + margin, fminf(max_x - margin, pos.x));
+            pos.y = fmaxf(min_y + margin, fminf(max_y - margin, pos.y));
+            
+            TraceLog(LOG_INFO, "Fallback: Spawning slime %d at position: (%.2f, %.2f)", i, pos.x, pos.y);
+            spawn_slime(pos);
+        }
     }
 }
 
-// Toggle visibility of behavior debug info
-static bool show_debug_info = false;
 void toggle_debug_info() {
-    show_debug_info = !show_debug_info;
+    toggle_debug();  // Reuse existing toggle_debug function
 }
 
-// Enhanced rendering with sprite images
-void render_enemies() {
+// Toggle debug visualization
+void toggle_debug() {
+    show_debug = !show_debug;
+    TraceLog(LOG_INFO, "Enemy debug visualization %s", show_debug ? "enabled" : "disabled");
+}
+
+// Set debug visualization state
+void set_debug(bool enabled) {
+    show_debug = enabled;
+    TraceLog(LOG_INFO, "Enemy debug visualization %s", show_debug ? "enabled" : "disabled");
+}
+
+// Get debug visualization state
+bool is_debug_enabled() {
+    return show_debug;
+}
+
+// Get number of active enemies
+int get_enemy_count() {
+    return static_cast<int>(slimes.size());
+}
+
+// Enhanced rendering with sprite images and debug visualization
+void render() {
     // Debug output to check if any slimes exist
     static bool logged = false;
     if (!logged) {
@@ -240,14 +362,21 @@ void render_enemies() {
         DrawRectangleRec(health_bar, RED);
         
         // Draw debug info if enabled
-        if (show_debug_info) {
+        if (show_debug) {
+            // Show hitbox/collision area
+            DrawCircleLines(
+                screen_pos.x, screen_pos.y, 
+                enemy.spec->radius, 
+                RED
+            );
+            
             // Show detection radius for chase behavior
             if (std::find(enemy.spec->behaviors.begin(), enemy.spec->behaviors.end(), 
                         BehaviorAtom::chase_player) != enemy.spec->behaviors.end()) {
                 DrawCircleLines(
                     screen_pos.x, screen_pos.y, 
                     enemy.chase.detection_radius, 
-                    enemy.chase.chasing ? RED : GRAY
+                    enemy.chase.chasing ? RED : BLUE
                 );
             }
             
@@ -269,18 +398,56 @@ void render_enemies() {
                 DrawLine(
                     screen_pos.x, screen_pos.y,
                     target_screen.x, target_screen.y,
-                    BLUE
+                    GREEN
                 );
-                DrawCircle(target_screen.x, target_screen.y, 3, BLUE);
+                DrawCircle(target_screen.x, target_screen.y, 3, GREEN);
+            }
+            
+            // Show behavior state text
+            const char* state_text = "";
+            Color state_color = WHITE;
+            
+            if (enemy.attack.attacking) {
+                state_text = "ATTACK";
+                state_color = RED;
+            } else if (enemy.chase.chasing) {
+                state_text = "CHASE";
+                state_color = YELLOW;
+            } else if (enemy.wander.has_target) {
+                state_text = "WANDER";
+                state_color = GREEN;
+            } else {
+                state_text = "IDLE";
+                state_color = GRAY;
+            }
+            
+            // Draw state text above enemy
+            DrawText(
+                state_text, 
+                screen_pos.x - MeasureText(state_text, 16)/2, 
+                screen_pos.y - enemy.spec->height/2 - 25, 
+                16, 
+                state_color
+            );
+            
+            // Show line to player if chasing or attacking
+            if (enemy.chase.chasing || enemy.attack.attacking) {
+                Vector2 player_pos_screen = world::world_to_screen(get_player_position());
+                DrawLineEx(
+                    screen_pos, 
+                    player_pos_screen, 
+                    1.0f, 
+                    enemy.attack.attacking ? RED : YELLOW
+                );
             }
         }
     }
     
-    // Show enemy count
-    if (show_debug_info) {
+    // Show enemy count in top-left if debug is enabled
+    if (show_debug) {
         char text[32];
         snprintf(text, sizeof(text), "Enemies: %zu", slimes.size());
-        DrawText(text, 10, 10, 20, WHITE);
+        DrawText(text, 10, 40, 20, WHITE);
     }
 }
 
@@ -335,7 +502,7 @@ bool hit_enemy_at(const Rectangle& hit_rect, const Hit& hit) {
     return any_hit;
 }
 
-void cleanup_enemies() {
+void cleanup() {
     // Unload textures to prevent memory leaks
     UnloadTexture(slime_texture);
     UnloadTexture(slime_squash_texture);
@@ -346,6 +513,19 @@ void cleanup_enemies() {
 
 const EnemySpec& get_slime_spec() {
     return SLIME_SPEC;
+}
+
+// Wrapper functions to maintain API compatibility
+void init_enemies() {
+    init();
+}
+
+void render_enemies() {
+    render();
+}
+
+void cleanup_enemies() {
+    cleanup();
 }
 
 } // namespace enemy 

@@ -38,8 +38,13 @@ bool HeartsController::is_player_alive() {
 // Called by ui::render_ui()
 void render_hearts() {
     if (player_hearts_ptr) {
-        // Create a rectangle for the hearts display in the top-left corner
-        Rectangle hearts_area = { 10, 10, 200, 50 };
+        // Create a rectangle for the hearts display in the top-right corner
+        Rectangle hearts_area = { 
+            static_cast<float>(GetScreenWidth()) - 210.0f, // 10px from right edge
+            10.0f,                                        // 10px from top edge
+            200.0f, 
+            50.0f 
+        };
         player_hearts_ptr->draw_hearts(hearts_area);
     }
 }

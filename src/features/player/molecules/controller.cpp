@@ -195,10 +195,6 @@ void PlayerController::render() {
     Vector2 text_screen_pos = world::world_to_screen({movement_.position.x - 30, movement_.position.y - 50});
     DrawText(state_text, static_cast<int>(text_screen_pos.x), 
              static_cast<int>(text_screen_pos.y), 20, WHITE);
-    
-    // Draw controls help
-    DrawText("Arrows: Move   Space: Attack   C: Toggle Collision", 
-             10, GetScreenHeight() - 30, 20, RAYWHITE);
 }
 
 void PlayerController::cleanup() {

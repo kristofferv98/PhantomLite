@@ -107,12 +107,16 @@ int main() {
             DrawFPS(10, 10);
         }
         
-        // Draw controls help
-        DrawText("Controls: Arrows = Move, SPACE = Attack", 
+        // Draw controls help - split between left and right sides
+        DrawText("Arrows: Move", 
                  10, GetScreenHeight() - 30, 20, RAYWHITE);
-        DrawText("D = Toggle Debug Info, S = Spawn Slime", 
+        DrawText("SPACE: Attack", 
+                 GetScreenWidth() - 200, GetScreenHeight() - 30, 20, RAYWHITE);
+        DrawText("D: Toggle Debug Info, S: Spawn Slime", 
                  10, GetScreenHeight() - 55, 20, RAYWHITE);
-        
+        DrawText("C: Toggle Collision", 
+                 GetScreenWidth() - 200, GetScreenHeight() - 55, 20, RAYWHITE);
+
         // Show player health and position for debugging
         Vector2 player_pos = player::get_position();
         char debug_text[128];

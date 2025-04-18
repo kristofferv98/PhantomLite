@@ -18,7 +18,8 @@ include_directories(${raylib_INCLUDE_DIRS} ${fmt_INCLUDE_DIRS} ${Catch2_INCLUDE_
 # Asset conversion - run svg to png conversion script
 add_custom_target(assets
     COMMAND ${CMAKE_SOURCE_DIR}/tools/convert_svgs.sh
-    COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/assets
+    COMMAND ${CMAKE_COMMAND} -E create_symlink "${CMAKE_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/assets"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Converting SVG assets to PNG and creating symlink..."
 )

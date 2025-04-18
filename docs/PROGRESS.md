@@ -67,6 +67,8 @@
 - [ ] Combat effects (particles, sounds)
 
 ### UI Feature Slice
+- [x] Action state indicators that follow player
+- [x] Debug text visualization with screen-space coordinates
 - [ ] Health/stamina display
 - [ ] Inventory UI
 - [ ] Dialog system

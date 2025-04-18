@@ -88,7 +88,9 @@ cmake --build --preset=default --target game
 
 - Arrow keys: Move player
 - Space: Attack
-- C: Toggle collision visualization
+- C: Toggle collision boxes and action indicators
+- D: Toggle debug information
+- S: Spawn additional enemy slimes
 
 ## Asset Pipeline
 

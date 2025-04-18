@@ -1,11 +1,11 @@
 /// main.cpp — engine bootstrap & event loop
 #include <raylib.h>
 #include <fmt/core.h>
+#include "public/core.hpp" // Main core interface
 #include "features/player/player.hpp"
 #include "features/world/world.hpp"
 #include "features/ui/ui.hpp"
 #include "features/enemy_slime/enemy_slime.hpp"
-#include "features/player/molecules/hearts_controller.hpp"
 
 int main() {
     SetTraceLogLevel(LOG_INFO);
@@ -21,8 +21,8 @@ int main() {
     ui::init_ui();     // Initialize UI systems
     enemy::init_enemies(); // Initialize enemy systems
     
-    // Initialize hearts controller
-    player::HeartsController::init();
+    // Initialize hearts controller for UI
+    ui::init_hearts_display(player::get_max_health());
     
     // Spawn multiple slimes for demo mode
     enemy::spawn_demo_slimes(5);
@@ -47,10 +47,10 @@ int main() {
         // Update UI last
         ui::update_ui(dt);
         
-        // Update hearts based on player health
-        player::HeartsController::update(
-            static_cast<float>(player::get_health()),
-            static_cast<float>(player::get_max_health())
+        // Update hearts based on player health using core interface
+        core::ui::update_health_display(
+            player::get_health(),
+            player::get_max_health()
         );
         
         // Check if player is alive (for game logic like game over)
@@ -80,13 +80,14 @@ int main() {
         // Toggle debug info visualization with D key
         if (IsKeyPressed(KEY_D)) {
             enemy::toggle_debug_info();
+            show_debug = !show_debug;
         }
         
         // Spawn more slimes with S key
         if (IsKeyPressed(KEY_S)) {
             // Get world dimensions
             float min_x, min_y, max_x, max_y;
-            world::get_world_bounds(&min_x, &min_y, &max_x, &max_y);
+            core::world::get_bounds(&min_x, &min_y, &max_x, &max_y);
             
             // Generate position in world coordinates
             float margin = 100.0f;
@@ -112,15 +113,19 @@ int main() {
         // Render UI on top
         ui::render_ui();
         
-        // Draw hearts in the top right corner
-        player::HeartsController::render({ 
-            static_cast<float>(GetScreenWidth() - 150), 
-            10.0f 
-        });
-        
         // Debug info
         if (show_debug) {
             DrawFPS(10, 10);
+            
+            // Show player health and position for debugging
+            Vector2 player_pos = core::entity::get_player_position();
+            core::ui::set_debug_text(
+                TextFormat("Player Pos: (%.0f, %.0f) Health: %d/%d", 
+                            player_pos.x, player_pos.y, 
+                            player::get_health(), player::get_max_health()),
+                {10, 40},
+                WHITE
+            );
         }
         
         // Draw controls help - split between left and right sides
@@ -132,13 +137,6 @@ int main() {
                  10, GetScreenHeight() - 55, 20, RAYWHITE);
         DrawText("C: Toggle Collision", 
                  GetScreenWidth() - 200, GetScreenHeight() - 55, 20, RAYWHITE);
-
-        // Show player health and position for debugging
-        Vector2 player_pos = player::get_position();
-        char debug_text[128];
-        snprintf(debug_text, sizeof(debug_text), "Player Pos: (%.0f, %.0f) Health: %d/%d", 
-                 player_pos.x, player_pos.y, player::get_health(), player::get_max_health());
-        DrawText(debug_text, 10, 10, 20, WHITE);
         
         EndDrawing();
     }
@@ -147,7 +145,6 @@ int main() {
     enemy::cleanup_enemies();
     ui::cleanup_ui();
     player::cleanup();
-    player::HeartsController::cleanup();
     world::cleanup();
     CloseWindow();
     return 0;

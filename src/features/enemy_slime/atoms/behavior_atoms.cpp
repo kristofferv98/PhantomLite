@@ -3,6 +3,7 @@
 #include "behavior_atoms.hpp"
 #include "../enemy_slime.hpp"
 #include "core/public/entity.hpp"
+#include "shared/math_utils.hpp"
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -44,8 +45,8 @@ BehaviorResult wander_random(EnemyInstance& enemy, float dt) {
             wander.target.y - enemy.position.y
         };
         
-        // Calculate distance to target
-        float distance = sqrtf(direction.x * direction.x + direction.y * direction.y);
+        // Calculate distance to target using shared math utility
+        float distance = shared::math::distance(enemy.position, wander.target);
         
         // If we're close enough to the target, mark as arrived
         if (distance < 5.0f) {
@@ -54,16 +55,13 @@ BehaviorResult wander_random(EnemyInstance& enemy, float dt) {
             return BehaviorResult::Completed;
         }
         
-        // Normalize direction
-        if (distance > 0) {
-            direction.x /= distance;
-            direction.y /= distance;
-        }
+        // Normalize direction using shared math utility
+        direction = shared::math::normalize(direction);
         
         // Slow down as we approach the target (ease-out effect)
         float speed_factor = 1.0f;
         if (distance < 50.0f) {
-            speed_factor = 0.5f + (distance / 50.0f) * 0.5f;
+            speed_factor = shared::math::lerp(0.5f, 1.0f, distance / 50.0f);
         }
         
         // Move toward target with adjusted speed
@@ -88,12 +86,14 @@ BehaviorResult chase_player(EnemyInstance& enemy, float dt) {
     // Get player position using core interface
     Vector2 player_pos = core::entity::get_player_position();
     
-    // Calculate distance to player
+    // Calculate distance to player using shared math utility
+    float distance_to_player = shared::math::distance(enemy.position, player_pos);
+    
+    // Calculate direction to player
     Vector2 to_player = {
         player_pos.x - enemy.position.x,
         player_pos.y - enemy.position.y
     };
-    float distance_to_player = sqrtf(to_player.x * to_player.x + to_player.y * to_player.y);
     
     // Check if player is within detection radius
     if (distance_to_player <= chase.detection_radius) {
@@ -106,11 +106,8 @@ BehaviorResult chase_player(EnemyInstance& enemy, float dt) {
     
     // If chasing, move toward player
     if (chase.chasing) {
-        // Normalize direction
-        if (distance_to_player > 0) {
-            to_player.x /= distance_to_player;
-            to_player.y /= distance_to_player;
-        }
+        // Normalize direction using shared math utility
+        to_player = shared::math::normalize(to_player);
         
         // Adjust speed based on distance - faster when farther, slower when closer
         float speed_factor = 1.0f;
@@ -118,8 +115,9 @@ BehaviorResult chase_player(EnemyInstance& enemy, float dt) {
         
         // Slow down as we get closer to the player (for better gameplay)
         if (distance_to_player < chase.detection_radius * 0.5f) {
-            // Ease out as we approach the player
-            speed_factor = 0.6f + (distance_to_player / (chase.detection_radius * 0.5f)) * 0.4f;
+            // Ease out as we approach the player using shared smooth_step
+            float t = distance_to_player / (chase.detection_radius * 0.5f);
+            speed_factor = shared::math::lerp(0.6f, 1.0f, t);
         } else {
             // Slight speed boost when far away (catch-up mechanic)
             speed_factor = 1.0f + (distance_to_player / chase.detection_radius) * 0.3f;
@@ -158,12 +156,14 @@ BehaviorResult attack_player(EnemyInstance& enemy, float dt) {
     // Get player position using core interface
     Vector2 player_pos = core::entity::get_player_position();
     
-    // Calculate distance to player
+    // Calculate distance to player using shared math utility
+    float distance_to_player = shared::math::distance(enemy.position, player_pos);
+    
+    // Calculate direction to player
     Vector2 to_player = {
         player_pos.x - enemy.position.x,
         player_pos.y - enemy.position.y
     };
-    float distance_to_player = sqrtf(to_player.x * to_player.x + to_player.y * to_player.y);
     
     // If enemy is not in attack range, fail this behavior
     if (distance_to_player > attack_data.attack_radius) {
@@ -173,12 +173,8 @@ BehaviorResult attack_player(EnemyInstance& enemy, float dt) {
     
     // If we can attack and player is in range, perform attack
     if (attack_data.can_attack) {
-        // Calculate normalized knockback direction
-        Vector2 knockback_dir = {0, 0};
-        if (distance_to_player > 0) {
-            knockback_dir.x = to_player.x / distance_to_player;
-            knockback_dir.y = to_player.y / distance_to_player;
-        }
+        // Calculate normalized knockback direction using shared math utility
+        Vector2 knockback_dir = shared::math::normalize(to_player);
         
         // Trace the attack for debugging
         TraceLog(LOG_INFO, "Enemy attacking player! Damage: %d", enemy.spec->dmg);

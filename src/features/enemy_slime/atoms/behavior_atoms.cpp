@@ -2,20 +2,10 @@
 
 #include "behavior_atoms.hpp"
 #include "../enemy_slime.hpp"
+#include "core/public/entity.hpp"
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
-
-// Define external player position accessor
-// In a full implementation, this would come from a world or player module
-extern Vector2 get_player_position();
-
-// Forward declaration for player damage function
-namespace player {
-    // Function to damage the player (implemented in player module)
-    // This declaration matches the actual implementation in player.cpp
-    bool take_damage(int amount, Vector2 knockback_dir);
-}
 
 namespace enemy::atoms {
 
@@ -95,8 +85,8 @@ BehaviorResult chase_player(EnemyInstance& enemy, float dt) {
     
     ChasePlayer& chase = enemy.chase;
     
-    // Get player position
-    Vector2 player_pos = get_player_position();
+    // Get player position using core interface
+    Vector2 player_pos = core::entity::get_player_position();
     
     // Calculate distance to player
     Vector2 to_player = {
@@ -165,8 +155,8 @@ BehaviorResult attack_player(EnemyInstance& enemy, float dt) {
         }
     }
     
-    // Get player position
-    Vector2 player_pos = get_player_position();
+    // Get player position using core interface
+    Vector2 player_pos = core::entity::get_player_position();
     
     // Calculate distance to player
     Vector2 to_player = {
@@ -193,8 +183,8 @@ BehaviorResult attack_player(EnemyInstance& enemy, float dt) {
         // Trace the attack for debugging
         TraceLog(LOG_INFO, "Enemy attacking player! Damage: %d", enemy.spec->dmg);
         
-        // Try to apply damage to player with knockback direction
-        bool hit = player::take_damage(enemy.spec->dmg, knockback_dir);
+        // Try to apply damage to player with knockback direction using core interface
+        bool hit = core::entity::damage_player(enemy.spec->dmg, knockback_dir);
         
         // Start cooldown
         attack_data.can_attack = false;

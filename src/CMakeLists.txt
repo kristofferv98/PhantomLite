@@ -10,11 +10,15 @@ add_subdirectory(features/world)
 add_subdirectory(features/ui)
 add_subdirectory(features/enemy_slime)
 
+# Add core interface adapters
+add_subdirectory(core)
+
 # Game executable
 add_executable(game core/main.cpp)
 target_link_libraries(game 
     PRIVATE 
     core 
+    core_interface
     player_feature
     world_feature
     ui

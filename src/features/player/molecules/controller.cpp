@@ -1,8 +1,8 @@
 /// controller.cpp — implementation of player controller molecule
 #include "controller.hpp"
 #include "../atoms/debug_draw.hpp"
-#include "../../world/world.hpp" // Include world API
-#include "../../ui/molecules/hearts_controller.hpp" // Include hearts controller
+#include "core/public/world.hpp"
+#include "core/public/ui.hpp"
 
 namespace player {
 namespace molecules {
@@ -48,7 +48,7 @@ void PlayerController::init(float start_x, float start_y) {
     health_ = atoms::make_health(10); // 10 pips total
     
     // Tell the world where the player is (for camera)
-    world::set_camera_target(movement_.position);
+    core::world::set_camera_target(movement_.position);
     
     // No need to initialize UI hearts here - handled in main.cpp
 }
@@ -76,7 +76,7 @@ void PlayerController::update(float dt) {
         atoms::CollisionResult result_x = collision_world_.test_collision(player_collision_id_, test_position_x);
         
         // Also check against world tilemap
-        bool world_collision_x = !world::is_walkable(test_position_x.x, test_position_x.y);
+        bool world_collision_x = !core::world::is_position_walkable(test_position_x.x, test_position_x.y);
         
         // Handle X collision
         if (result_x.collided || world_collision_x) {
@@ -89,7 +89,7 @@ void PlayerController::update(float dt) {
         atoms::CollisionResult result_y = collision_world_.test_collision(player_collision_id_, test_position_y);
         
         // Also check against world tilemap
-        bool world_collision_y = !world::is_walkable(test_position_y.x, test_position_y.y);
+        bool world_collision_y = !core::world::is_position_walkable(test_position_y.x, test_position_y.y);
         
         // Handle Y collision
         if (result_y.collided || world_collision_y) {
@@ -99,7 +99,7 @@ void PlayerController::update(float dt) {
         
         // Final position check (for diagonal collisions)
         atoms::CollisionResult final_result = collision_world_.test_collision(player_collision_id_, movement_.position);
-        bool world_final_collision = !world::is_walkable(movement_.position.x, movement_.position.y);
+        bool world_final_collision = !core::world::is_position_walkable(movement_.position.x, movement_.position.y);
         
         if (final_result.collided || world_final_collision) {
             // Fallback to previous position completely if still colliding
@@ -110,7 +110,7 @@ void PlayerController::update(float dt) {
         collision_world_.update_object_position(player_collision_id_, movement_.position);
         
         // Update camera target position
-        world::set_camera_target(movement_.position);
+        core::world::set_camera_target(movement_.position);
     }
     
     // Get texture size for screen bounds checking
@@ -118,7 +118,7 @@ void PlayerController::update(float dt) {
     
     // Get world bounds
     float min_x, min_y, max_x, max_y;
-    world::get_world_bounds(&min_x, &min_y, &max_x, &max_y);
+    core::world::get_bounds(&min_x, &min_y, &max_x, &max_y);
     
     // Constrain to world bounds
     float half_width = current_texture.width / 2.0f;
@@ -134,6 +134,9 @@ void PlayerController::update(float dt) {
         update_animation_state();
     }
     
+    // Update UI health display
+    core::ui::update_health_display(health_.current, health_.max);
+    
     // Toggle collision visualization with C key
     if (IsKeyPressed(KEY_C)) {
         show_collision_shapes_ = !show_collision_shapes_;
@@ -145,7 +148,7 @@ void PlayerController::render() {
     const Texture2D& texture = atoms::get_current_frame(animation_);
     
     // Convert world position to screen position for drawing
-    Vector2 screen_pos = world::world_to_screen(movement_.position);
+    Vector2 screen_pos = core::world::world_to_screen(movement_.position);
     
     // Draw player sprite centered on position with appropriate color
     Color player_color = is_alive() ? WHITE : GRAY; // Use is_alive() for color
@@ -155,13 +158,11 @@ void PlayerController::render() {
                         screen_pos.y - texture.height / 2.0f}, 
                 player_color);
     
-    // Health bar is now handled by the player::HeartsController
-    
     // Draw collision shapes if enabled
     if (show_collision_shapes_) {
         // Draw our collision objects transformed to screen space
         for (const auto& obj : collision_world_.get_objects()) {
-            Vector2 obj_screen_pos = world::world_to_screen(obj.position);
+            Vector2 obj_screen_pos = core::world::world_to_screen(obj.position);
             atoms::draw_collision_shape(obj.shape, obj_screen_pos, RED);
         }
     }
@@ -174,9 +175,10 @@ void PlayerController::render() {
         case PlayerState::ATTACKING: state_text = "ATTACKING"; break;
     }
     
-    Vector2 text_screen_pos = world::world_to_screen({movement_.position.x - 30, movement_.position.y - 50});
-    DrawText(state_text, static_cast<int>(text_screen_pos.x), 
-             static_cast<int>(text_screen_pos.y), 20, WHITE);
+    // Use core interface for debug text
+    core::ui::set_debug_text(state_text, 
+                            {movement_.position.x - 30, movement_.position.y - 50},
+                            WHITE);
 }
 
 void PlayerController::cleanup() {

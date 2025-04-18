@@ -15,6 +15,7 @@ Makefile
 *.cmake
 !CMakeLists.txt
 !CMakePresets.json
+CMakeUserPresets.json
 
 # Compiled Object files
 *.slo
@@ -49,6 +50,7 @@ Makefile
 *.swp
 *~
 .DS_Store
+.cursor/
 
 # Conan
 .conan/
@@ -61,4 +63,20 @@ compile_commands.json
 # Python environment
 /.venv
 *.log
-*.tmp 
+*.tmp
+
+# Security and sensitive files
+*.key
+*.pem
+*.env
+secrets.json
+*password*
+*secret*
+*token*
+*credential*
+
+# User-specific files
+*.user
+*.suo
+*.userprefs
+.settings/ 

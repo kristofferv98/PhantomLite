@@ -61,8 +61,8 @@ void init_enemies() {
     slimes.clear();
     
     // Load enemy textures
-    slime_texture = LoadTexture("assets/sprites/for/slime.png");
-    slime_squash_texture = LoadTexture("assets/sprites/for/slime_squash.png");
+    slime_texture = LoadTexture("assets/sprites/slime.png");
+    slime_squash_texture = LoadTexture("assets/sprites/slime_squash.png");
     
     // Set random seed for reproducible behavior
     srand(42);

@@ -21,8 +21,8 @@ int main() {
     ui::init_ui();     // Initialize UI systems
     enemy::init_enemies(); // Initialize enemy systems
     
-    // Initialize hearts controller for UI
-    ui::init_hearts_display(player::get_max_health());
+    // Initialize UI health display with player's max health
+    ui::update_ui(0.0f); // Initial UI update
     
     // Spawn multiple slimes for demo mode
     enemy::spawn_demo_slimes(5);

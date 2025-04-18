@@ -165,20 +165,22 @@ void PlayerController::render() {
             Vector2 obj_screen_pos = core::world::world_to_screen(obj.position);
             atoms::draw_collision_shape(obj.shape, obj_screen_pos, RED);
         }
+        
+        // Debug state display - only show when collision shapes are visible
+        const char* state_text = "";
+        switch (animation_.current_state) {
+            case PlayerState::IDLE: state_text = "IDLE"; break;
+            case PlayerState::WALKING: state_text = "WALKING"; break;
+            case PlayerState::ATTACKING: state_text = "ATTACKING"; break;
+        }
+        
+        // Convert world position to screen for debug text (above the player)
+        Vector2 text_world_pos = {movement_.position.x - 30, movement_.position.y - 50};
+        Vector2 text_screen_pos = core::world::world_to_screen(text_world_pos);
+        
+        // Use core interface for debug text with screen coordinates
+        core::ui::set_debug_text(state_text, text_screen_pos, WHITE);
     }
-    
-    // Debug state display
-    const char* state_text = "";
-    switch (animation_.current_state) {
-        case PlayerState::IDLE: state_text = "IDLE"; break;
-        case PlayerState::WALKING: state_text = "WALKING"; break;
-        case PlayerState::ATTACKING: state_text = "ATTACKING"; break;
-    }
-    
-    // Use core interface for debug text
-    core::ui::set_debug_text(state_text, 
-                            {movement_.position.x - 30, movement_.position.y - 50},
-                            WHITE);
 }
 
 void PlayerController::cleanup() {

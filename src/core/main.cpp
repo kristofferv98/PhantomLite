@@ -129,11 +129,15 @@ int main() {
             
             // Show player health and position for debugging
             Vector2 player_pos = core::entity::get_player_position();
+            
+            // Use direct screen coordinates for debug text overlay
+            Vector2 debug_screen_pos = {10, 40};
+            
             core::ui::set_debug_text(
                 TextFormat("Player Pos: (%.0f, %.0f) Health: %d/%d", 
                             player_pos.x, player_pos.y, 
                             player::get_health(), player::get_max_health()),
-                {10, 40},
+                debug_screen_pos,
                 WHITE
             );
         }
@@ -145,8 +149,8 @@ int main() {
                  GetScreenWidth() - 200, GetScreenHeight() - 30, 20, RAYWHITE);
         DrawText("D: Toggle Debug Info, S: Spawn Slime", 
                  10, GetScreenHeight() - 55, 20, RAYWHITE);
-        DrawText("C: Toggle Collision", 
-                 GetScreenWidth() - 200, GetScreenHeight() - 55, 20, RAYWHITE);
+        DrawText("C: Toggle Collision & Action Indicators", 
+                 GetScreenWidth() - 350, GetScreenHeight() - 55, 20, RAYWHITE);
         
         EndDrawing();
     }

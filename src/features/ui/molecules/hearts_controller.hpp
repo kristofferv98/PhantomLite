@@ -1,35 +1,19 @@
-/// hearts_controller.hpp — Manages hearts UI and damage processing
-
+/// hearts_controller.hpp — Header for the Hearts UI controller
 #pragma once
-#include "../atoms/hearts.hpp"
 
 namespace ui {
 
+/// HeartsController: Static methods to control the player's heart display
 class HeartsController {
 public:
-    // Initialize with default health
-    static void init();
-    
-    // Update the hearts display
-    static void update(float dt);
-    
-    // Draw the hearts to the screen
-    static void render();
-    
-    // Cleanup resources
-    static void cleanup();
-    
-    // Player takes damage
+    /// Take damage, reducing current health
     static void take_damage(int pips);
     
-    // Player heals
+    /// Heal the player
     static void heal(int pips);
     
-    // Get current health status
+    /// Check if player is alive
     static bool is_player_alive();
-    
-private:
-    static Hearts player_hearts;
 };
 
 } // namespace ui 

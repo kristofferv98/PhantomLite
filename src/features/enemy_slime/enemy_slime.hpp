@@ -51,6 +51,7 @@ struct EnemySpec {
     float speed;                      ///< Movement speed in pixels/sec
     std::array<BehaviorAtom, 3> behaviors; ///< Behavior atoms used
     std::array<DropChance, 2> drops;  ///< Possible drops
+    int animation_frames;             ///< Number of animation frames
 };
 
 /// Enemy instance - dynamic data for a specific enemy

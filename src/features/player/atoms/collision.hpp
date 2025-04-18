@@ -52,6 +52,9 @@ struct CollisionResult {
 // Create a collision world to manage and test collision objects
 class CollisionWorld {
 public:
+    // Constructor with optional grid settings
+    CollisionWorld(float cell_size = 128.0f, int max_objects_per_cell = 10);
+    
     // Add an object to the collision world
     int add_object(const CollisionObject& object);
     
@@ -67,9 +70,35 @@ public:
     // Get all objects in the world
     const std::vector<CollisionObject>& get_objects() const;
     
+    // Get collision object by ID
+    const CollisionObject* get_object(int id) const;
+    
+    // Debug visualization
+    void draw_debug_grid() const;
+    
 private:
+    struct SpatialCell {
+        std::vector<int> object_ids;
+    };
+    
     std::vector<CollisionObject> objects_;
     int next_id_ = 0;
+    
+    // Spatial partitioning grid
+    std::vector<SpatialCell> grid_;
+    float cell_size_;
+    int grid_width_ = 0;
+    int grid_height_ = 0;
+    int max_objects_per_cell_;
+    
+    // Get cell index from world position
+    int get_cell_index(float x, float y) const;
+    
+    // Get neighboring cells for an object
+    std::vector<int> get_neighboring_cells(const CollisionObject& object) const;
+    
+    // Update object's position in the spatial grid
+    void update_object_in_grid(int id);
     
     // Collision detection helpers
     bool check_collision(const CollisionObject& a, const CollisionObject& b, Vector2* penetration = nullptr);

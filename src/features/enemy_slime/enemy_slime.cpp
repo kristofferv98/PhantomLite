@@ -26,7 +26,8 @@ static const EnemySpec SLIME_SPEC = {
     .dmg = 1,                // 1 pip of damage
     .speed = 60.0f,          // 60 pixels per second
     .behaviors = {BehaviorAtom::wander_random, BehaviorAtom::chase_player, BehaviorAtom::attack_player},
-    .drops = {DropChance{DropType::Heart, 30}, DropChance{DropType::Coin, 70}}
+    .drops = {DropChance{DropType::Heart, 30}, DropChance{DropType::Coin, 70}},
+    .animation_frames = 2     // Slime has 2 animation frames
 };
 
 // Storage for all active slime instances
@@ -60,8 +61,8 @@ void init_enemies() {
     slimes.clear();
     
     // Load enemy textures
-    slime_texture = LoadTexture("assets/sprites/slime.png");
-    slime_squash_texture = LoadTexture("assets/sprites/slime_squash.png");
+    slime_texture = LoadTexture("assets/sprites/for/slime.png");
+    slime_squash_texture = LoadTexture("assets/sprites/for/slime_squash.png");
     
     // Set random seed for reproducible behavior
     srand(42);
@@ -144,7 +145,7 @@ void update_enemies(float dt) {
         enemy.anim_timer += dt;
         if (enemy.anim_timer >= ANIMATION_FRAME_TIME) {
             enemy.anim_timer = 0;
-            enemy.anim_frame = (enemy.anim_frame + 1) % 2; // Assuming 2 frames of animation
+            enemy.anim_frame = (enemy.anim_frame + 1) % enemy.spec->animation_frames;
         }
     }
     

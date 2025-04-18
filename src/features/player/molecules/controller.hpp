@@ -28,6 +28,18 @@ public:
     // Get player collision ID
     int get_player_collision_id() const;
     
+    // Get player position
+    Vector2 get_position() const;
+    
+    // Apply knockback force to player
+    bool take_damage(int pips, Vector2 knockback_dir);
+    
+    // Get current health
+    int get_health() const { return health_pips_; }
+    
+    bool is_attacking() const;
+    Rectangle get_attack_rect() const;
+    
 private:
     // Component states from atoms
     atoms::MovementState movement_;
@@ -35,6 +47,11 @@ private:
     atoms::ActionState actions_;
     atoms::CollisionWorld collision_world_;
     int player_collision_id_ = -1;
+    
+    // Player health tracking
+    int health_pips_ = 10;
+    static constexpr int kMaxHealthPips = 10;
+    bool dead_ = false;
     
     // Debug flags
     bool show_collision_shapes_ = true;

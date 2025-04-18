@@ -1,52 +1,52 @@
-#define CATCH_CONFIG_MAIN
-#include <catch2/catch.hpp>
+/// test_hearts.cpp — Unit tests for the hearts UI atom
+
+#define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
+#include <catch2/catch_all.hpp>
 #include "../atoms/hearts.hpp"
 
-TEST_CASE("Hearts atom basic functionality", "[ui][hearts]") {
-    ui::Hearts hearts(12); // 3 hearts (12 pips)
+TEST_CASE("Hearts can be initialized with default values", "[hearts]") {
+    ui::Hearts hearts;
+    REQUIRE(hearts.get_max_pips() == 12);
+    REQUIRE(hearts.get_current_pips() == 12);
+}
+
+TEST_CASE("Hearts can be initialized with custom values", "[hearts]") {
+    ui::Hearts hearts(10, 5);
+    REQUIRE(hearts.get_max_pips() == 10);
+    REQUIRE(hearts.get_current_pips() == 5);
+}
+
+TEST_CASE("Hearts can take damage", "[hearts]") {
+    ui::Hearts hearts(10, 10);
+    hearts.take_damage(3);
+    REQUIRE(hearts.get_current_pips() == 7);
+}
+
+TEST_CASE("Hearts cannot go below zero", "[hearts]") {
+    ui::Hearts hearts(10, 5);
+    hearts.take_damage(10);
+    REQUIRE(hearts.get_current_pips() == 0);
+}
+
+TEST_CASE("Hearts can be healed", "[hearts]") {
+    ui::Hearts hearts(10, 5);
+    hearts.heal(3);
+    REQUIRE(hearts.get_current_pips() == 8);
+}
+
+TEST_CASE("Hearts cannot exceed max health", "[hearts]") {
+    ui::Hearts hearts(10, 5);
+    hearts.heal(10);
+    REQUIRE(hearts.get_current_pips() == 10);
+}
+
+TEST_CASE("Hearts health percentage is calculated correctly", "[hearts]") {
+    ui::Hearts hearts(10, 5);
+    REQUIRE(hearts.get_health_percent() == 0.5f);
     
-    SECTION("Initial state") {
-        REQUIRE(hearts.get_current_pips() == 12);
-        REQUIRE(hearts.get_max_pips() == 12);
-        REQUIRE(hearts.is_alive() == true);
-    }
+    hearts.take_damage(5);
+    REQUIRE(hearts.get_health_percent() == 0.0f);
     
-    SECTION("Taking damage") {
-        hearts.take_damage(4); // Lose 1 heart
-        REQUIRE(hearts.get_current_pips() == 8);
-        REQUIRE(hearts.is_alive() == true);
-        
-        hearts.take_damage(7); // Lose almost 2 hearts
-        REQUIRE(hearts.get_current_pips() == 1);
-        REQUIRE(hearts.is_alive() == true);
-        
-        hearts.take_damage(1); // Just enough to die
-        REQUIRE(hearts.get_current_pips() == 0);
-        REQUIRE(hearts.is_alive() == false);
-        
-        // Can't go below 0
-        hearts.take_damage(5);
-        REQUIRE(hearts.get_current_pips() == 0);
-    }
-    
-    SECTION("Healing") {
-        hearts.take_damage(8); // Down to 4 pips
-        REQUIRE(hearts.get_current_pips() == 4);
-        
-        hearts.heal(3); // Up to 7 pips
-        REQUIRE(hearts.get_current_pips() == 7);
-        
-        hearts.heal(10); // Trying to heal beyond max
-        REQUIRE(hearts.get_current_pips() == 12); // Capped at max_pips
-    }
-    
-    SECTION("Edge cases") {
-        // Test healing from 0
-        hearts.take_damage(20); // Ensure at 0
-        REQUIRE(hearts.get_current_pips() == 0);
-        
-        hearts.heal(1);
-        REQUIRE(hearts.get_current_pips() == 1);
-        REQUIRE(hearts.is_alive() == true);
-    }
+    hearts.heal(10);
+    REQUIRE(hearts.get_health_percent() == 1.0f);
 } 

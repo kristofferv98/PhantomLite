@@ -2,6 +2,7 @@
 #include "controller.hpp"
 #include "../atoms/debug_draw.hpp"
 #include "../../world/world.hpp" // Include world API
+#include "../../ui/molecules/hearts_controller.hpp" // Include hearts controller
 
 namespace player {
 namespace molecules {
@@ -45,9 +46,15 @@ void PlayerController::init(float start_x, float start_y) {
     
     // Tell the world where the player is (for camera)
     world::set_camera_target(movement_.position);
+    
+    // Initialize UI to match player max health
+    ui::HeartsController::heal(kMaxHealthPips);
 }
 
 void PlayerController::update(float dt) {
+    // Don't process input if dead
+    if (dead_) return;
+
     // Save previous movement state for comparison
     bool was_moving = movement_.is_moving;
     Vector2 previous_position = movement_.position;
@@ -138,11 +145,32 @@ void PlayerController::render() {
     // Convert world position to screen position for drawing
     Vector2 screen_pos = world::world_to_screen(movement_.position);
     
-    // Draw player sprite centered on position
+    // Draw player sprite centered on position with appropriate color
+    Color player_color = dead_ ? GRAY : WHITE;
+    
     DrawTextureV(texture, 
                 Vector2{screen_pos.x - texture.width / 2.0f, 
                         screen_pos.y - texture.height / 2.0f}, 
-                WHITE);
+                player_color);
+    
+    // Draw health bar above player
+    float health_percent = (float)health_pips_ / kMaxHealthPips;
+    Rectangle health_bar = {
+        screen_pos.x - 25, // Center the health bar
+        screen_pos.y - texture.height/2 - 10, // Position above player
+        50 * health_percent, // Width based on health percentage
+        5 // Height of bar
+    };
+    DrawRectangleRec(health_bar, RED);
+    
+    // Draw health bar outline
+    Rectangle health_bar_outline = {
+        screen_pos.x - 25,
+        screen_pos.y - texture.height/2 - 10,
+        50, // Full width
+        5
+    };
+    DrawRectangleLinesEx(health_bar_outline, 1.0f, WHITE);
     
     // Draw collision shapes if enabled
     if (show_collision_shapes_) {
@@ -181,6 +209,10 @@ atoms::CollisionWorld& PlayerController::get_collision_world() {
 
 int PlayerController::get_player_collision_id() const {
     return player_collision_id_;
+}
+
+Vector2 PlayerController::get_position() const {
+    return movement_.position;
 }
 
 void PlayerController::update_animation_state() {
@@ -232,5 +264,79 @@ void PlayerController::create_test_obstacles() {
     collision_world_.add_object(rect_obj);
 }
 
+bool PlayerController::take_damage(int pips, Vector2 knockback_dir) {
+    // Ignore damage if already dead
+    if (dead_) return false;
+    
+    // Calculate knockback force (force proportional to damage)
+    Vector2 knockback = {
+        knockback_dir.x * 5.0f,
+        knockback_dir.y * 5.0f
+    };
+    
+    // Apply knockback directly to position
+    movement_.position.x += knockback.x;
+    movement_.position.y += knockback.y;
+    
+    // Reduce health
+    health_pips_ = std::max(0, health_pips_ - pips);
+    
+    // Update UI
+    ui::HeartsController::take_damage(pips);
+    
+    // Log the damage
+    TraceLog(LOG_INFO, "Player took %d damage with knockback (%.2f, %.2f)",
+             pips, knockback.x, knockback.y);
+    TraceLog(LOG_INFO, "Player health reduced to %d/%d", 
+             health_pips_, kMaxHealthPips);
+    
+    // Check for death
+    if (health_pips_ <= 0) {
+        dead_ = true;
+        // Could trigger death animation here
+        atoms::set_animation_state(animation_, PlayerState::IDLE);
+        // Disable input handling in update method
+    }
+    
+    return true;
+}
+
+bool PlayerController::is_attacking() const {
+    return actions_.attacking;
+}
+
+Rectangle PlayerController::get_attack_rect() const {
+    // Calculate attack rectangle in front of player based on direction and animation
+    const Texture2D& texture = atoms::get_current_frame(animation_);
+    
+    Rectangle attack_rect = {
+        movement_.position.x - texture.width/2,
+        movement_.position.y - texture.height/2,
+        static_cast<float>(texture.width),
+        static_cast<float>(texture.height)
+    };
+    
+    // If facing right, extend to the right
+    if (IsKeyDown(KEY_RIGHT)) {
+        attack_rect.x += texture.width * 0.75f;
+        attack_rect.width *= 0.5f;
+    }
+    // If facing left, extend to the left
+    else if (IsKeyDown(KEY_LEFT)) {
+        attack_rect.width *= 0.5f;
+    }
+    // If facing down, extend down
+    else if (IsKeyDown(KEY_DOWN)) {
+        attack_rect.y += texture.height * 0.75f;
+        attack_rect.height *= 0.5f;
+    }
+    // If facing up, extend up
+    else if (IsKeyDown(KEY_UP)) {
+        attack_rect.height *= 0.5f;
+    }
+    
+    return attack_rect;
+}
+
 } // namespace molecules
-} // namespace player 
+} // namespace player

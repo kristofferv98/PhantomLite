@@ -25,23 +25,131 @@ CollisionShape CollisionShape::Circle(float radius, Vector2 offset) {
 }
 
 // CollisionWorld implementation
-int CollisionWorld::add_object(const CollisionObject& object) {
-    CollisionObject new_object = object;
-    new_object.id = next_id_++;
-    objects_.push_back(new_object);
-    return new_object.id;
+CollisionWorld::CollisionWorld(float cell_size, int max_objects_per_cell)
+    : cell_size_(cell_size), max_objects_per_cell_(max_objects_per_cell) {
+    // Initialize spatial grid with a default size
+    // It will grow as needed based on world bounds
+    grid_width_ = 20;
+    grid_height_ = 20;
+    grid_.resize(grid_width_ * grid_height_);
 }
 
+int CollisionWorld::get_cell_index(float x, float y) const {
+    int cell_x = static_cast<int>(x / cell_size_);
+    int cell_y = static_cast<int>(y / cell_size_);
+    
+    // Clamp to grid bounds
+    cell_x = std::max(0, std::min(cell_x, grid_width_ - 1));
+    cell_y = std::max(0, std::min(cell_y, grid_height_ - 1));
+    
+    return cell_y * grid_width_ + cell_x;
+}
+
+std::vector<int> CollisionWorld::get_neighboring_cells(const CollisionObject& object) const {
+    std::vector<int> cells;
+    Vector2 pos = object.position;
+    float radius = 0.0f;
+    
+    // Calculate bounds based on shape type
+    float min_x, min_y, max_x, max_y;
+    if (object.shape.type == CollisionShapeType::RECTANGLE) {
+        min_x = pos.x + object.shape.offset.x - object.shape.rect.width / 2;
+        max_x = pos.x + object.shape.offset.x + object.shape.rect.width / 2;
+        min_y = pos.y + object.shape.offset.y - object.shape.rect.height / 2;
+        max_y = pos.y + object.shape.offset.y + object.shape.rect.height / 2;
+    } else { // Circle
+        radius = object.shape.circle.radius;
+        min_x = pos.x + object.shape.offset.x - radius;
+        max_x = pos.x + object.shape.offset.x + radius;
+        min_y = pos.y + object.shape.offset.y - radius;
+        max_y = pos.y + object.shape.offset.y + radius;
+    }
+    
+    // Get cell indices for min and max bounds
+    int min_cell_x = static_cast<int>(min_x / cell_size_);
+    int min_cell_y = static_cast<int>(min_y / cell_size_);
+    int max_cell_x = static_cast<int>(max_x / cell_size_);
+    int max_cell_y = static_cast<int>(max_y / cell_size_);
+    
+    // Clamp to grid bounds
+    min_cell_x = std::max(0, std::min(min_cell_x, grid_width_ - 1));
+    min_cell_y = std::max(0, std::min(min_cell_y, grid_height_ - 1));
+    max_cell_x = std::max(0, std::min(max_cell_x, grid_width_ - 1));
+    max_cell_y = std::max(0, std::min(max_cell_y, grid_height_ - 1));
+    
+    // Add all cells in the range
+    for (int y = min_cell_y; y <= max_cell_y; y++) {
+        for (int x = min_cell_x; x <= max_cell_x; x++) {
+            cells.push_back(y * grid_width_ + x);
+        }
+    }
+    
+    return cells;
+}
+
+void CollisionWorld::update_object_in_grid(int id) {
+    // First remove from all cells
+    for (auto& cell : grid_) {
+        cell.object_ids.erase(
+            std::remove(cell.object_ids.begin(), cell.object_ids.end(), id),
+            cell.object_ids.end()
+        );
+    }
+    
+    // Find the object
+    const CollisionObject* obj = nullptr;
+    for (const auto& object : objects_) {
+        if (object.id == id) {
+            obj = &object;
+            break;
+        }
+    }
+    
+    if (!obj) return; // Object not found
+    
+    // Add to new cells
+    auto cells = get_neighboring_cells(*obj);
+    for (int cell_idx : cells) {
+        if (cell_idx >= 0 && cell_idx < grid_.size()) {
+            grid_[cell_idx].object_ids.push_back(id);
+        }
+    }
+}
+
+// Update object position implementation
 void CollisionWorld::update_object_position(int id, Vector2 position) {
     for (auto& object : objects_) {
         if (object.id == id) {
             object.position = position;
+            update_object_in_grid(id);
             return;
         }
     }
 }
 
+// Add object implementation
+int CollisionWorld::add_object(const CollisionObject& object) {
+    CollisionObject new_object = object;
+    new_object.id = next_id_++;
+    objects_.push_back(new_object);
+    
+    // Add to spatial grid
+    update_object_in_grid(new_object.id);
+    
+    return new_object.id;
+}
+
+// Remove object implementation
 void CollisionWorld::remove_object(int id) {
+    // Remove from grid first
+    for (auto& cell : grid_) {
+        cell.object_ids.erase(
+            std::remove(cell.object_ids.begin(), cell.object_ids.end(), id),
+            cell.object_ids.end()
+        );
+    }
+    
+    // Then remove from objects list
     objects_.erase(
         std::remove_if(objects_.begin(), objects_.end(),
             [id](const CollisionObject& obj) { return obj.id == id; }),
@@ -49,10 +157,57 @@ void CollisionWorld::remove_object(int id) {
     );
 }
 
+// Get all objects in the world
 const std::vector<CollisionObject>& CollisionWorld::get_objects() const {
     return objects_;
 }
 
+// Get object by ID
+const CollisionObject* CollisionWorld::get_object(int id) const {
+    for (const auto& obj : objects_) {
+        if (obj.id == id) {
+            return &obj;
+        }
+    }
+    return nullptr;
+}
+
+// Draw debug visualization of the spatial grid
+void CollisionWorld::draw_debug_grid() const {
+    // Draw grid cells
+    for (int y = 0; y < grid_height_; y++) {
+        for (int x = 0; x < grid_width_; x++) {
+            int cell_idx = y * grid_width_ + x;
+            
+            // Calculate cell rectangle
+            Rectangle cell_rect = {
+                x * cell_size_,
+                y * cell_size_,
+                cell_size_,
+                cell_size_
+            };
+            
+            // Color based on object count
+            int object_count = grid_[cell_idx].object_ids.size();
+            Color cell_color = GRAY;
+            cell_color.a = (object_count > 0) ? 50 + std::min(object_count * 20, 205) : 20;
+            
+            DrawRectangleLinesEx(cell_rect, 1.0f, cell_color);
+            
+            // Draw object count in cell if non-zero
+            if (object_count > 0) {
+                char count_text[8];
+                sprintf(count_text, "%d", object_count);
+                DrawText(count_text, 
+                         static_cast<int>(cell_rect.x + cell_rect.width/2 - 5), 
+                         static_cast<int>(cell_rect.y + cell_rect.height/2 - 10),
+                         20, WHITE);
+            }
+        }
+    }
+}
+
+// Optimized collision testing with spatial partitioning
 CollisionResult CollisionWorld::test_collision(int object_id, Vector2 new_position) {
     CollisionResult result = { false, {0, 0}, -1 };
     
@@ -73,24 +228,47 @@ CollisionResult CollisionWorld::test_collision(int object_id, Vector2 new_positi
     CollisionObject test_copy = *test_object;
     test_copy.position = new_position;
     
-    // Test against all other objects
-    for (const auto& other : objects_) {
-        // Skip self
-        if (other.id == object_id) {
-            continue;
-        }
+    // Get potential collision cells
+    std::vector<int> cells = get_neighboring_cells(test_copy);
+    
+    // Store IDs we've already checked to avoid duplicates
+    std::vector<int> checked_ids;
+    
+    // Test against objects in neighboring cells
+    for (int cell_idx : cells) {
+        if (cell_idx < 0 || cell_idx >= grid_.size()) continue;
         
-        // Only test against solid objects
-        if (!other.is_solid) {
-            continue;
-        }
-        
-        Vector2 penetration = {0, 0};
-        if (check_collision(test_copy, other, &penetration)) {
-            result.collided = true;
-            result.penetration = penetration;
-            result.object_id = other.id;
-            return result; // Return on first collision found
+        for (int other_id : grid_[cell_idx].object_ids) {
+            // Skip self
+            if (other_id == object_id) continue;
+            
+            // Skip if already checked
+            if (std::find(checked_ids.begin(), checked_ids.end(), other_id) != checked_ids.end()) {
+                continue;
+            }
+            
+            // Find the other object
+            const CollisionObject* other = nullptr;
+            for (const auto& obj : objects_) {
+                if (obj.id == other_id) {
+                    other = &obj;
+                    break;
+                }
+            }
+            
+            if (!other || !other->is_solid) continue;
+            
+            // Mark as checked
+            checked_ids.push_back(other_id);
+            
+            // Check for collision
+            Vector2 penetration = {0, 0};
+            if (check_collision(test_copy, *other, &penetration)) {
+                result.collided = true;
+                result.penetration = penetration;
+                result.object_id = other_id;
+                return result; // Return on first collision
+            }
         }
     }
     
@@ -140,23 +318,34 @@ bool CollisionWorld::check_rect_rect(const CollisionObject& a, const CollisionOb
     
     // Calculate penetration if requested
     if (penetration) {
-        // Find penetration depths on each axis
-        float x_overlap_right = a_right - b_left;
-        float x_overlap_left = b_right - a_left;
-        float y_overlap_bottom = a_bottom - b_top;
-        float y_overlap_top = b_bottom - a_top;
+        // Find penetration in both axes
+        float x_overlap = std::min(a_right - b_left, b_right - a_left);
+        float y_overlap = std::min(a_bottom - b_top, b_bottom - a_top);
         
-        // Find minimum penetration vector
-        float x_penetration = (x_overlap_right < x_overlap_left) ? -x_overlap_right : x_overlap_left;
-        float y_penetration = (y_overlap_bottom < y_overlap_top) ? -y_overlap_bottom : y_overlap_top;
+        // Debug collision info
+        #ifdef DEBUG_COLLISIONS
+        TraceLog(LOG_DEBUG, "Collision: x_overlap=%.2f, y_overlap=%.2f", x_overlap, y_overlap);
+        #endif
         
         // Use the axis with the smaller penetration
-        if (std::abs(x_penetration) < std::abs(y_penetration)) {
-            penetration->x = x_penetration;
+        if (x_overlap < y_overlap) {
+            // X-axis has smaller penetration - determine direction based on centers
+            penetration->x = (a.position.x < b.position.x) ? -x_overlap : x_overlap;
             penetration->y = 0;
+            
+            #ifdef DEBUG_COLLISIONS
+            TraceLog(LOG_DEBUG, "X-axis resolution: penetration=(%.2f, %.2f)", 
+                    penetration->x, penetration->y);
+            #endif
         } else {
+            // Y-axis has smaller penetration - determine direction based on centers
             penetration->x = 0;
-            penetration->y = y_penetration;
+            penetration->y = (a.position.y < b.position.y) ? -y_overlap : y_overlap;
+            
+            #ifdef DEBUG_COLLISIONS
+            TraceLog(LOG_DEBUG, "Y-axis resolution: penetration=(%.2f, %.2f)", 
+                    penetration->x, penetration->y);
+            #endif
         }
     }
     

@@ -4,6 +4,7 @@ set -e
 # Make sure the output directories exist
 mkdir -p assets/sprites
 mkdir -p assets/tiles
+mkdir -p assets/ui
 
 # SVG to PNG conversion function with enhanced transparency support
 convert_svg() {
@@ -49,6 +50,11 @@ convert_svg() {
 # Convert sprites (64x64)
 if [ -d "assets_src/sprites" ]; then
     convert_svg "assets_src/sprites" "assets/sprites" 64 64
+fi
+
+# Convert UI elements (32x32)
+if [ -d "assets_src/ui" ]; then
+    convert_svg "assets_src/ui" "assets/ui" 32 32
 fi
 
 # Convert standard tiles (32x32)

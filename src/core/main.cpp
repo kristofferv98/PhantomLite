@@ -5,6 +5,7 @@
 #include "features/world/world.hpp"
 #include "features/ui/ui.hpp"
 #include "features/enemy_slime/enemy_slime.hpp"
+#include "features/player/molecules/hearts_controller.hpp"
 
 int main() {
     SetTraceLogLevel(LOG_INFO);
@@ -19,6 +20,9 @@ int main() {
     );    // Then initialize player 
     ui::init_ui();     // Initialize UI systems
     enemy::init_enemies(); // Initialize enemy systems
+    
+    // Initialize hearts controller
+    player::HeartsController::init();
     
     // Spawn multiple slimes for demo mode
     enemy::spawn_demo_slimes(5);
@@ -42,6 +46,12 @@ int main() {
         
         // Update UI last
         ui::update_ui(dt);
+        
+        // Update hearts based on player health
+        player::HeartsController::update(
+            static_cast<float>(player::get_health()),
+            static_cast<float>(player::get_max_health())
+        );
         
         // Check if player is alive (for game logic like game over)
         if (!player::is_alive()) {
@@ -102,6 +112,12 @@ int main() {
         // Render UI on top
         ui::render_ui();
         
+        // Draw hearts in the top right corner
+        player::HeartsController::render({ 
+            static_cast<float>(GetScreenWidth() - 150), 
+            10.0f 
+        });
+        
         // Debug info
         if (show_debug) {
             DrawFPS(10, 10);
@@ -131,6 +147,7 @@ int main() {
     enemy::cleanup_enemies();
     ui::cleanup_ui();
     player::cleanup();
+    player::HeartsController::cleanup();
     world::cleanup();
     CloseWindow();
     return 0;

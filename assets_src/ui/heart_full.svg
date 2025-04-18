@@ -1,0 +1,19 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background (transparent) -->
+  <rect width="64" height="64" fill="none"/>
+  
+  <!-- Full Heart (4/4 pips) -->
+  <!-- Dark Red Border/Shadow -->
+  <path d="M16,16 h8 v-4 h16 v4 h8 v4 h4 v8 h-4 v8 h-4 v4 h-4 v4 h-16 v-4 h-4 v-4 h-4 v-8 h-4 v-8 h4 v-4 z" fill="#7a1f21"/>
+  
+  <!-- Medium Red Main Shape -->
+  <path d="M20,16 h8 v-4 h8 v4 h8 v4 h4 v8 h-4 v8 h-4 v4 h-4 v4 h-8 v-4 h-4 v-4 h-4 v-8 h-4 v-8 h4 v-4 z" fill="#c22326"/>
+  
+  <!-- Light Red Inner Fill (fully filled) -->
+  <path d="M24,16 h16 v4 h4 v8 h-4 v8 h-4 v4 h-8 v-4 h-4 v-4 h-4 v-8 h-4 v-8 h4 v-4 z" fill="#ff3a3f"/>
+  
+  <!-- Highlight Areas (Lighter Red) -->
+  <path d="M24,16 h16 v4 h-16 z" fill="#ff5a5f"/>
+  <path d="M20,20 h4 v4 h-4 z" fill="#ff5a5f"/>
+  <path d="M40,20 h4 v4 h-4 z" fill="#ff5a5f"/>
+</svg> 

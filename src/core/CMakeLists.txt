@@ -11,6 +11,6 @@ target_include_directories(core_interface PUBLIC
 target_link_libraries(core_interface
     player_feature
     world_feature
-    ui_feature
+    ui
     raylib
 ) 

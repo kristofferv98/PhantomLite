@@ -4,6 +4,8 @@ cmake_minimum_required(VERSION 3.16)
 add_library(enemies_feature
     types.cpp
     types.hpp
+    behavior_atoms.cpp
+    behavior_atoms.hpp
 )
 
 # Include directories
@@ -16,6 +18,7 @@ target_include_directories(enemies_feature
 target_link_libraries(enemies_feature
     PUBLIC
         raylib
+        world_feature  # Required for world::is_walkable and world::world_to_screen
 )
 
 # Set C++ standard

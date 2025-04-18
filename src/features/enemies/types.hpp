@@ -3,6 +3,7 @@
 #include <raylib.h>
 #include <array>
 #include <vector>
+#include <cmath>
 
 namespace enemies {
 
@@ -36,13 +37,27 @@ struct DropChance {
 
 /// Behavior building blocks that can be composed
 enum class BehaviorAtom {
-    wander_random,
-    chase_player,
-    attack_player,
-    ranged_shoot,
-    charge_dash,
-    armor_gate,
-    dead_poof
+    // Basic behaviors
+    wander_random,     // Original simple wandering
+    chase_player,      // Simple player chasing
+    attack_player,     // Simple player attacking
+    
+    // Advanced steering behaviors
+    wander_noise,      // Wander using Perlin noise for smoother paths
+    seek_target,       // Move directly toward a target
+    strafe_target,     // Orbit around a target
+    separate_allies,   // Maintain distance from other enemies
+    avoid_obstacle,    // Avoid obstacles by raycast detection
+    context_steer,     // Combined steering behavior
+    
+    // Combat behaviors
+    charge_dash,       // Wind up and dash in a direction
+    ranged_shoot,      // Fire projectiles at a distance
+    attack_melee,      // Attack at close range
+    
+    // Effects
+    armor_gate,        // Ignore damage unless a weak spot is hit
+    dead_poof          // Visual effect on death
 };
 
 /// Direction the enemy is facing (for animations)
@@ -75,10 +90,17 @@ struct EnemyStats {
 struct Hit {
     int dmg;                                      // Damage amount
     Vector2 knockback;                            // Knockback force
-    enum class Type { Melee, Arrow, Fire, Ice } type; // Damage type
+    enum class Type { 
+        Melee, 
+        Arrow, 
+        Fire, 
+        Ice,
+        Pierce,  // Added new damage type
+        Magic    // Added new damage type
+    } type;      // Damage type
 };
 
-/// Wander behavior state
+/// Wander behavior state (original simple version)
 struct WanderRandom {
     float radius = 100.0f;                        // Maximum wander distance
     Vector2 target = {0.0f, 0.0f};                // Current target position
@@ -87,19 +109,95 @@ struct WanderRandom {
     float current_timer = 0.0f;                   // Timer for current state
 };
 
-/// Player chase behavior state
+/// Player chase behavior state (original simple version)
 struct ChasePlayer {
     float detection_radius = 200.0f;              // Distance at which player is detected
     bool chasing = false;                         // Whether currently chasing player
 };
 
-/// Attack behavior state
+/// Attack behavior state (original simple version)
 struct AttackPlayer {
     float attack_radius = 50.0f;                  // Maximum attack distance
     float cooldown = 1.2f;                        // Time between attacks
     float timer = 0.0f;                           // Current cooldown timer
     bool can_attack = true;                       // Whether can currently attack
     bool attacking = false;                       // Whether currently attacking
+};
+
+/// NEW: Advanced wander behavior using noise for smoother paths
+struct WanderNoise {
+    float radius = 100.0f;                        // Maximum wander distance
+    float sway_speed = 0.5f;                      // How quickly to change direction
+    Vector2 spawn_point = {0.0f, 0.0f};           // Initial spawn location
+    float noise_offset_x = 0.0f;                  // Noise sampling offset X
+    float noise_offset_y = 0.0f;                  // Noise sampling offset Y
+};
+
+/// NEW: Seek target behavior (move toward a target point)
+struct SeekTarget {
+    float preferred_dist = 0.0f;                  // Preferred distance to maintain
+    bool active = false;                          // Whether currently seeking
+    float seek_gain = 1.0f;                       // How strongly to seek
+};
+
+/// NEW: Strafe target behavior (orbit around a point)
+struct StrafeTarget {
+    float orbit_radius = 100.0f;                  // Ideal distance to orbit
+    int direction = 1;                            // 1 for clockwise, -1 for counterclockwise
+    bool active = false;                          // Whether currently strafing
+    float orbit_gain = 1.0f;                      // How strongly to orbit
+};
+
+/// NEW: Separate from allies (maintain spacing between enemies)
+struct SeparateAllies {
+    float desired_spacing = 50.0f;                // Minimum distance between enemies
+    float separation_gain = 1.0f;                 // How strongly to separate
+};
+
+/// NEW: Avoid obstacles using raycasts
+struct AvoidObstacle {
+    float lookahead_px = 100.0f;                  // How far ahead to check for obstacles
+    float avoidance_gain = 2.0f;                  // How strongly to avoid obstacles
+};
+
+/// NEW: Charge and dash attack
+struct ChargeDash {
+    enum class State {
+        Idle,
+        Charging,
+        Dashing,
+        Cooldown
+    };
+    
+    State state = State::Idle;                    // Current dash state
+    float charge_timer = 0.0f;                    // Windup timer
+    float charge_duration = 0.5f;                 // How long to wind up
+    float dash_timer = 0.0f;                      // Dash duration timer
+    float dash_duration = 0.3f;                   // How long to dash
+    float cooldown_timer = 0.0f;                  // Cooldown timer
+    float cooldown_duration = 2.0f;               // How long to wait between dashes
+    float dash_speed = 300.0f;                    // Speed multiplier while dashing
+    Vector2 dash_direction = {0.0f, 0.0f};        // Direction to dash
+};
+
+/// NEW: Ranged attack behavior
+struct RangedShoot {
+    float cooldown = 2.0f;                        // Time between shots
+    float timer = 0.0f;                           // Current cooldown timer
+    bool can_fire = true;                         // Whether can currently fire
+    float projectile_speed = 200.0f;              // Speed of projectiles
+    int projectile_damage = 1;                    // Damage dealt by projectiles
+};
+
+/// NEW: Melee attack behavior
+struct AttackMelee {
+    float reach = 40.0f;                          // Attack reach distance
+    float cooldown = 1.0f;                        // Time between attacks
+    float timer = 0.0f;                           // Current cooldown timer
+    bool can_attack = true;                       // Whether can currently attack
+    bool attacking = false;                       // Whether currently attacking
+    float attack_duration = 0.3f;                 // Duration of attack animation
+    float attack_timer = 0.0f;                    // Current attack animation timer
 };
 
 /// Result of a behavior atom execution
@@ -109,7 +207,7 @@ enum class BehaviorResult {
     Failed     // Failed to perform behavior
 };
 
-/// Runtime state for an enemy instance
+/// Runtime state for an enemy instance with 16-ray steering grid
 struct EnemyRuntime {
     const EnemyStats* spec;                       // Reference to static enemy data
     Vector2 position;                             // Current position
@@ -117,16 +215,52 @@ struct EnemyRuntime {
     Rectangle collision_rect;                     // Collision rectangle
     Color color;                                  // Rendering color/tint
     Facing facing;                                // Direction enemy is facing
-    WanderRandom wander;                          // Wander behavior state
-    ChasePlayer chase;                            // Chase behavior state
-    AttackPlayer attack;                          // Attack behavior state
     bool active;                                  // Whether this enemy is active
     float anim_timer;                             // Animation timer
     int anim_frame;                               // Current animation frame
     bool is_moving;                               // Whether enemy is currently moving
     
+    // NEW: 16-ray steering grid for context steering
+    static constexpr int NUM_RAYS = 16;           // Rays spread every 22.5 degrees
+    std::array<float, NUM_RAYS> weights = {0};    // -1 (blocked) to 1 (desired)
+    
+    // Behavior state data (original + new)
+    WanderRandom wander;                          // Original wander behavior
+    ChasePlayer chase;                            // Original chase behavior
+    AttackPlayer attack;                          // Original attack behavior
+    
+    // NEW: Advanced behavior state data
+    WanderNoise wander_noise;                     // Noise-based wandering
+    SeekTarget seek_target;                       // Target seeking
+    StrafeTarget strafe_target;                   // Target strafing
+    SeparateAllies separate_allies;               // Ally separation
+    AvoidObstacle avoid_obstacle;                 // Obstacle avoidance
+    ChargeDash charge_dash;                       // Charge and dash attack
+    RangedShoot ranged_shoot;                     // Ranged attacks
+    AttackMelee attack_melee;                     // Melee attacks
+    
     // Constructor to initialize an enemy instance
     EnemyRuntime(const EnemyStats& spec_ref, Vector2 pos);
+    
+    // NEW: Helper methods
+    bool is_alive() const { return hp > 0 && active; }
+    void on_hit(const Hit& hit);
+    
+    // NEW: Reset all steering weights to zero
+    void reset_weights() {
+        for (int i = 0; i < NUM_RAYS; i++) {
+            weights[i] = 0.0f;
+        }
+    }
+    
+    // NEW: Get the ray direction vector for a given ray index
+    Vector2 get_ray_dir(int ray_index) const {
+        float angle = ray_index * (2.0f * PI / NUM_RAYS);
+        return { cosf(angle), sinf(angle) };
+    }
+    
+    // NEW: Apply movement based on the best available direction
+    void apply_steering_movement(float speed, float dt);
 };
 
 /// Spawn request data from the level loader

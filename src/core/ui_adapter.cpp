@@ -1,17 +1,15 @@
 /// ui_adapter.cpp — implementation of UI interfaces
 #include "public/ui.hpp"
 #include "../features/ui/ui.hpp"
-#include "../features/ui/molecules/hearts_controller.hpp"
+#include "../features/player/molecules/hearts_controller.hpp"
 #include <raylib.h>
 
 namespace core {
 namespace ui {
 
 void update_health_display(int current_health, int max_health) {
-    // Delegate to the UI module's hearts controller
-    // This would typically be handled by the hearts controller in the UI module
-    // For now, directly call the UI module's update function which will handle the hearts
-    // display internally
+    // Delegate to the player module's hearts controller
+    player::HeartsController::update(current_health, max_health);
 }
 
 void set_debug_text(const char* text, Vector2 world_position, Color color) {

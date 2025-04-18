@@ -21,6 +21,9 @@ int main() {
     ui::init_ui();     // Initialize UI systems
     enemy::init_enemies(); // Initialize enemy systems
     
+    // Initialize the hearts controller
+    player::HeartsController::init();
+    
     // Initialize UI health display with player's max health
     ui::update_ui(0.0f); // Initial UI update
     
@@ -112,6 +115,12 @@ int main() {
         
         // Render UI on top
         ui::render_ui();
+        
+        // Draw hearts in the top right corner
+        player::HeartsController::render({ 
+            static_cast<float>(GetScreenWidth() - 150), 
+            10.0f 
+        });
         
         // Debug info
         if (show_debug) {

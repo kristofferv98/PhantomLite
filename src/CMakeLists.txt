@@ -8,6 +8,7 @@ target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_subdirectory(features/player)
 add_subdirectory(features/world)
 add_subdirectory(features/ui)
+add_subdirectory(features/enemies)
 add_subdirectory(features/enemy_slime)
 
 # Add shared utilities
@@ -26,6 +27,7 @@ target_link_libraries(game
     player_feature
     world_feature
     ui
+    enemies_feature
     enemy_slime
 )
 

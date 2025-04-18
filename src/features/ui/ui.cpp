@@ -2,14 +2,15 @@
 
 #include "ui.hpp"
 #include "molecules/hearts_controller.hpp"
+#include "../player/player.hpp"
 
 namespace ui {
 
 // Forward declaration for function in hearts_controller.cpp
-extern void render_hearts();
+// extern void render_hearts(); // Disabled - using player::HeartsController instead
 
 void init_ui() {
-    // No initialization needed - HeartsController uses static methods
+    // No UI initialization needed
 }
 
 void update_ui(float dt) {
@@ -17,27 +18,28 @@ void update_ui(float dt) {
 }
 
 void render_ui() {
-    // Render hearts UI
-    render_hearts();
+    // Hearts rendering is now handled by player::HeartsController
+    // render_hearts(); // Disabled
     
     // Render other UI elements as needed
 }
 
 void player_take_damage(int pips) {
-    HeartsController::take_damage(pips);
+    // Damage is now handled through player::take_damage
+    // which updates health directly
 }
 
 void player_heal(int pips) {
-    HeartsController::heal(pips);
+    // Healing is now handled through direct health updates
 }
 
 float get_player_health_percent() {
-    // Return proper percentage (alive = 1.0f, dead = 0.0f)
-    return HeartsController::is_player_alive() ? 1.0f : 0.0f;
+    // Get health percent via player module
+    return static_cast<float>(player::get_health()) / player::get_max_health();
 }
 
 void cleanup_ui() {
-    // No cleanup needed - all UI elements are static
+    // No UI cleanup needed
 }
 
 } // namespace ui 

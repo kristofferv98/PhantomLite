@@ -50,8 +50,7 @@ void PlayerController::init(float start_x, float start_y) {
     // Tell the world where the player is (for camera)
     world::set_camera_target(movement_.position);
     
-    // Initialize UI hearts - NOTE: HeartsController::init needs to be added
-    ui::HeartsController::init(health_.max); // Push max health to UI
+    // No need to initialize UI hearts here - handled in main.cpp
 }
 
 void PlayerController::update(float dt) {
@@ -156,24 +155,7 @@ void PlayerController::render() {
                         screen_pos.y - texture.height / 2.0f}, 
                 player_color);
     
-    // Draw health bar above player
-    float health_percent = static_cast<float>(health_.current) / health_.max;
-    Rectangle health_bar = {
-        screen_pos.x - 25, // Center the health bar
-        screen_pos.y - texture.height/2 - 10, // Position above player
-        50 * health_percent, // Width based on health percentage
-        5 // Height of bar
-    };
-    DrawRectangleRec(health_bar, RED);
-    
-    // Draw health bar outline
-    Rectangle health_bar_outline = {
-        screen_pos.x - 25,
-        screen_pos.y - texture.height/2 - 10,
-        50, // Full width
-        5
-    };
-    DrawRectangleLinesEx(health_bar_outline, 1.0f, WHITE);
+    // Health bar is now handled by the player::HeartsController
     
     // Draw collision shapes if enabled
     if (show_collision_shapes_) {
@@ -286,9 +268,6 @@ bool PlayerController::take_damage(int pips, Vector2 knockback_dir) {
     // Apply knockback directly to position
     movement_.position.x += knockback.x;
     movement_.position.y += knockback.y;
-    
-    // Update UI - Tell the UI controller about the damage
-    ui::HeartsController::take_damage(pips);
     
     // Log the damage
     TraceLog(LOG_INFO, "Player took %d damage with knockback (%.2f, %.2f)",

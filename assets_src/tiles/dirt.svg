@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dirt path tile with transparent background -->
+  
+  <!-- Main dirt base with rounded corners -->
+  <rect width="32" height="32" fill="#be8e5a" rx="2" ry="2"/>
+  
+  <!-- Dirt texture pattern -->
+  <rect width="32" height="32" fill="url(#dirtPattern)" opacity="0.6" rx="2" ry="2"/>
+  
+  <!-- Edge soft mask to help with blending -->
+  <g opacity="0.5">
+    <rect x="0" y="0" width="32" height="1" fill="url(#edgeGradientTop)"/>
+    <rect x="0" y="31" width="32" height="1" fill="url(#edgeGradientBottom)"/>
+    <rect x="0" y="0" width="1" height="32" fill="url(#edgeGradientLeft)"/>
+    <rect x="31" y="0" width="1" height="32" fill="url(#edgeGradientRight)"/>
+  </g>
+  
+  <!-- Main dirt variations - larger rocks and highlights -->
+  <g>
+    <!-- Rocks -->
+    <g fill="#9d7245" opacity="0.7">
+      <path d="M4,5 L9,5 L8,9 L3,8 Z"/>
+      <path d="M14,3 L17,2 L19,5 L15,7 Z"/>
+      <path d="M24,7 L28,6 L29,10 L25,12 Z"/>
+      <path d="M1,16 L5,15 L6,19 L2,19 Z"/>
+      <path d="M13,16 L19,15 L20,21 L14,22 Z"/>
+      <path d="M24,18 L30,17 L30,23 L25,24 Z"/>
+      <path d="M7,26 L12,25 L13,30 L8,30 Z"/>
+      <path d="M20,26 L25,25 L26,31 L21,32 Z"/>
+    </g>
+    
+    <!-- Highlights -->
+    <g fill="#d2a97a" opacity="0.5">
+      <circle cx="6" cy="7" r="1.5"/>
+      <circle cx="16" cy="4" r="1"/>
+      <circle cx="26" cy="8" r="1.5"/>
+      <circle cx="3" cy="17" r="1"/>
+      <circle cx="16" cy="19" r="2"/>
+      <circle cx="27" cy="21" r="1.5"/>
+      <circle cx="9" cy="28" r="1.5"/>
+      <circle cx="23" cy="28" r="1.5"/>
+    </g>
+  </g>
+  
+  <!-- Smaller details - pebbles and texture -->
+  <g>
+    <!-- Small pebbles -->
+    <g fill="#7a5a38" opacity="0.6">
+      <circle cx="7" cy="3" r="0.7"/>
+      <circle cx="21" cy="5" r="1"/>
+      <circle cx="28" cy="4" r="0.6"/>
+      <circle cx="5" cy="12" r="0.8"/>
+      <circle cx="22" cy="12" r="0.7"/>
+      <circle cx="12" cy="21" r="0.9"/>
+      <circle cx="29" cy="26" r="0.8"/>
+      <circle cx="16" cy="28" r="0.7"/>
+      <circle cx="3" cy="28" r="0.9"/>
+    </g>
+    
+    <!-- Subtle texture spots -->
+    <g fill="#d6b895" opacity="0.3">
+      <circle cx="3" cy="3" r="0.5"/>
+      <circle cx="9" cy="11" r="0.4"/>
+      <circle cx="25" cy="3" r="0.6"/>
+      <circle cx="17" cy="9" r="0.5"/>
+      <circle cx="30" cy="13" r="0.4"/>
+      <circle cx="8" cy="17" r="0.5"/>
+      <circle cx="22" cy="19" r="0.6"/>
+      <circle cx="29" cy="29" r="0.5"/>
+      <circle cx="12" cy="30" r="0.4"/>
+    </g>
+  </g>
+  
+  <!-- Pattern definitions -->
+  <defs>
+    <pattern id="dirtPattern" patternUnits="userSpaceOnUse" width="8" height="8">
+      <rect width="8" height="8" fill="#be8e5a"/>
+      <circle cx="2" cy="2" r="0.6" fill="#aa7d4e" opacity="0.4"/>
+      <circle cx="6" cy="6" r="0.6" fill="#aa7d4e" opacity="0.4"/>
+      <circle cx="0" cy="4" r="0.4" fill="#d2a97a" opacity="0.3"/>
+      <circle cx="4" cy="0" r="0.4" fill="#d2a97a" opacity="0.3"/>
+      <circle cx="4" cy="4" r="0.5" fill="#9d7245" opacity="0.2"/>
+      <circle cx="0" cy="0" r="0.5" fill="#9d7245" opacity="0.2"/>
+    </pattern>
+    
+    <!-- Gradient for soft edges -->
+    <linearGradient id="edgeGradientTop" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#58b546" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#58b546" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="edgeGradientBottom" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#58b546" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#58b546" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="edgeGradientLeft" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#58b546" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#58b546" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="edgeGradientRight" x1="100%" y1="0%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#58b546" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#58b546" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+</svg> 

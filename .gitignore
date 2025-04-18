@@ -1,5 +1,64 @@
-/build/
+# Build directories
+build/
+out/
+bin/
+lib/
+
+# Generated assets
+assets/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+!CMakePresets.json
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# IDE directories and files
+.vs/
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Conan
+.conan/
+conan.lock
+
+# Cache files
+.cache/
+compile_commands.json
+
+# Python environment
 /.venv
 *.log
-*.tmp
-*.DS_Store 
+*.tmp 

@@ -9,7 +9,7 @@ alwaysApply: true
 
 ---
 
-## 1 ▸ Directory & Slice Structure
+## 1 ▸ Directory & Slice Structure (root: Platform_AI_game)
 
 ```
 /                 (git root)

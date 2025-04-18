@@ -79,4 +79,4 @@ secrets.json
 *.user
 *.suo
 *.userprefs
-.settings/ 
+.settings/

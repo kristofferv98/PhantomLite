@@ -1,6 +1,6 @@
 # PhantomLite
 
-A modern 2D pixel-art style game engine with Zelda-like mechanics, built with C++ and Raylib.
+A modern 2D pixel-art style game engine with 2D game-like mechanics, built with C++ and Raylib.
 
 ![PhantomLite Screenshot](docs/images/screenshot.png)
 

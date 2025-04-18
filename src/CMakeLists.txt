@@ -7,6 +7,7 @@ target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # Add feature slices
 add_subdirectory(features/player)
 add_subdirectory(features/world)
+add_subdirectory(features/ui)
 
 # Game executable
 add_executable(game core/main.cpp)
@@ -15,6 +16,7 @@ target_link_libraries(game
     core 
     player_feature
     world_feature
+    ui
 )
 
 # Unit tests (only if core/tests.cpp exists)

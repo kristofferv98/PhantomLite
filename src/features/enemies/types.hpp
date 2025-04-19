@@ -298,24 +298,25 @@ struct EnemyRuntime {
         velocity = {0.0f, 0.0f};
         knockback = {0.0f, 0.0f};
         
-        // Initialize wander noise parameters
+        // Initialize wander noise parameters with more natural values
         wander_noise.radius = 200.0f;
-        wander_noise.sway_speed = 0.5f;
+        wander_noise.sway_speed = 0.4f; // Reduced for smoother movement
         wander_noise.spawn_point = pos; // Remember initial position
-        wander_noise.noise_offset_x = static_cast<float>(rand() % 1000) / 100.0f; // Random starting offset
+        // Random offset to avoid synchronized movement between enemies
+        wander_noise.noise_offset_x = static_cast<float>(rand() % 1000) / 100.0f;
         wander_noise.noise_offset_y = static_cast<float>(rand() % 1000) / 100.0f;
         
-        // Initialize strafe behavior
-        strafe_target.orbit_radius = 100.0f;
+        // Initialize strafe behavior with balanced parameters
+        strafe_target.orbit_radius = 90.0f; // Slightly reduced for more responsive behavior
         strafe_target.direction = (rand() % 2) ? 1 : -1; // Random direction
-        strafe_target.orbit_gain = 0.8f;
+        strafe_target.orbit_gain = 0.7f; // Balanced against other behaviors
         
-        // Initialize separation parameters
-        separate_allies.desired_spacing = spec->radius * 3.0f;
-        separate_allies.separation_gain = 1.2f;
+        // Initialize separation parameters for better group behavior
+        separate_allies.desired_spacing = spec->radius * 3.2f;
+        separate_allies.separation_gain = 1.3f; // Increased to avoid clumping
         
-        // Initialize obstacle avoidance
-        avoid_obstacle.lookahead_px = spec->radius * 4.0f;
+        // Initialize obstacle avoidance with better prediction
+        avoid_obstacle.lookahead_px = spec->radius * 5.0f; // Increased for earlier detection
         avoid_obstacle.avoidance_gain = 1.5f;
         
         // Initialize attack parameters

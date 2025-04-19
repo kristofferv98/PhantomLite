@@ -25,60 +25,8 @@ Vector2 get_player_position() {
 
 // PERF: ~0.03-0.08ms per enemy
 enemies::BehaviorResult wander_noise(enemies::EnemyRuntime& enemy, float dt) {
-    // Update noise sampling position
-    enemy.wander_noise.noise_offset_x += dt * enemy.wander_noise.sway_speed;
-    enemy.wander_noise.noise_offset_y += dt * enemy.wander_noise.sway_speed * 0.7f; // Different frequency for y
-    
-    // Sample Simplex noise at the current position (3 octaves)
-    float noise_x = noise_gen.noise2(
-        enemy.wander_noise.noise_offset_x, 
-        enemy.wander_noise.noise_offset_y + 500.0f, // offset y for different sampling space
-        3, 0.5f);
-    
-    float noise_y = noise_gen.noise2(
-        enemy.wander_noise.noise_offset_x + 500.0f, 
-        enemy.wander_noise.noise_offset_y,
-        3, 0.5f);
-    
-    // Map noise [-1,1] to full circle direction
-    float angle = (noise_x * 2.0f - 1.0f) * PI;
-    
-    // Create a direction vector from noise
-    Vector2 wander_dir = { cosf(angle), sinf(angle) };
-    
-    // Get distance from spawn point
-    Vector2 to_spawn = {
-        enemy.wander_noise.spawn_point.x - enemy.position.x,
-        enemy.wander_noise.spawn_point.y - enemy.position.y
-    };
-    float dist_to_spawn = sqrtf(to_spawn.x * to_spawn.x + to_spawn.y * to_spawn.y);
-    
-    // If too far from spawn point, blend in a return vector
-    if (dist_to_spawn > enemy.wander_noise.radius) {
-        // Normalize to_spawn
-        float spawn_length = sqrtf(to_spawn.x * to_spawn.x + to_spawn.y * to_spawn.y);
-        if (spawn_length > 0) {
-            to_spawn.x /= spawn_length;
-            to_spawn.y /= spawn_length;
-        }
-        
-        // Blend based on how far beyond radius
-        float blend = fminf((dist_to_spawn - enemy.wander_noise.radius) / 50.0f, 1.0f);
-        wander_dir.x = wander_dir.x * (1.0f - blend) + to_spawn.x * blend;
-        wander_dir.y = wander_dir.y * (1.0f - blend) + to_spawn.y * blend;
-        
-        // Renormalize
-        float len = sqrtf(wander_dir.x * wander_dir.x + wander_dir.y * wander_dir.y);
-        if (len > 0) {
-            wander_dir.x /= len;
-            wander_dir.y /= len;
-        }
-    }
-    
-    // Apply steering weights based on wander direction
-    enemies::atoms::apply_direction_weights(enemy, wander_dir, 0.5f); // Lower priority for wandering
-    
-    return enemies::BehaviorResult::Running;
+    // Delegate to the standard implementation in enemies namespace for consistency
+    return enemies::atoms::wander_noise(enemy, dt);
 }
 
 // PERF: ~0.01-0.02ms per enemy

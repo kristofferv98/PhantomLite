@@ -82,17 +82,17 @@ BehaviorResult apply_context_steering(EnemyRuntime& enemy, float dt) {
 
 // Wander implementation
 BehaviorResult wander_noise(EnemyRuntime& enemy, float dt) {
-    // Update noise sampling position - increase speed for more active wandering
-    enemy.wander_noise.noise_offset_x += dt * enemy.wander_noise.sway_speed * 1.5f;
-    enemy.wander_noise.noise_offset_y += dt * enemy.wander_noise.sway_speed * 1.2f;
+    // Update noise sampling position - using balanced multipliers to avoid directional bias
+    enemy.wander_noise.noise_offset_x += dt * enemy.wander_noise.sway_speed * 1.0f;
+    enemy.wander_noise.noise_offset_y += dt * enemy.wander_noise.sway_speed * 1.0f;
     
-    // Sample 2D noise for direction, using more octaves for richer patterns
+    // Sample 2D noise for direction, using same number of octaves for both axes
     float angle_offset = static_cast<float>(noise.noise2(
         enemy.wander_noise.noise_offset_x, 
         enemy.wander_noise.noise_offset_y + 500.0f, // offset for different sampling
-        5, 0.65f)) * PI * 2.5f; // Wider range for more varied movement
+        4, 0.6f)) * PI * 2.0f; // Full 360-degree range of movement
     
-    // Calculate direction vector from noise
+    // Calculate direction vector from noise - normalized for balanced x/y influence
     float dir_x = cosf(angle_offset);
     float dir_y = sinf(angle_offset);
     Vector2 wander_dir = { dir_x, dir_y };
@@ -121,7 +121,7 @@ BehaviorResult wander_noise(EnemyRuntime& enemy, float dt) {
         if (radius_ratio > 0.6f) {
             // Start with gentle return force at 60% of radius (earlier than before)
             blend = (radius_ratio - 0.6f) / 0.4f; // 0-1 range from 60% to 100% of radius
-            blend = blend * blend * 0.7f; // Cubic for sharper increase with 70% max influence
+            blend = blend * blend * 0.7f; // Squared for sharper increase with 70% max influence
         }
         
         if (radius_ratio > 1.0f) {
@@ -169,8 +169,8 @@ BehaviorResult wander_noise(EnemyRuntime& enemy, float dt) {
         float weight = cosf(angle_diff);
         weight = weight * weight; // Square for sharper falloff from optimal direction
         
-        // Apply weight multiplier and scaling - increased from 0.5f to 0.7f for stronger wandering
-        weight = weight * 0.7f;
+        // Apply weight multiplier - using 0.6f for balanced weight compared to other behaviors
+        weight = weight * 0.6f;
         
         // Add to the ray's weight
         enemy.weights[i] += weight;
@@ -512,9 +512,9 @@ void apply_strafe_weights(EnemyRuntime& enemy, Vector2 target, int direction, fl
         enemy.position.y * 0.01f + time_factor * 0.3f,
         2, 0.6f));
     
-    // Occasionally flip strafe direction based on noise
+    // Occasionally flip strafe direction based on noise - less frequently for more stable circling
     int effective_direction = direction;
-    if (direction_noise > 0.8f) { // 20% chance to reverse
+    if (direction_noise > 0.9f) { // 10% chance to reverse (changed from 20%)
         effective_direction = -direction;
     }
     
@@ -524,8 +524,8 @@ void apply_strafe_weights(EnemyRuntime& enemy, Vector2 target, int direction, fl
         enemy.position.y * 0.02f + time_factor * 0.15f,
         2, 0.5f));
     
-    // Adjust distance correction based on noise
-    dist_gain += (orbit_noise - 0.5f) * 0.3f; // -0.15 to +0.15 adjustment
+    // Adjust distance correction based on noise - reduced range for more stability
+    dist_gain += (orbit_noise - 0.5f) * 0.2f; // -0.1 to +0.1 adjustment (reduced from 0.3)
     
     // Calculate weights for each ray
     for (int i = 0; i < enemy.NUM_RAYS; i++) {
@@ -547,11 +547,11 @@ void apply_strafe_weights(EnemyRuntime& enemy, Vector2 target, int direction, fl
             strafe_weight = sqrtf(1.0f - dot * dot);
             
             // Add slight bias toward forward movement for more natural circling
-            float forward_bias = 0.2f * fmaxf(0.0f, dot);
+            float forward_bias = 0.15f * fmaxf(0.0f, dot); // Reduced from 0.2 for more lateral movement
             strafe_weight += forward_bias;
         } else {
-            // Negative weight for wrong direction
-            strafe_weight = -sqrtf(1.0f - dot * dot) * 0.4f; // Reduced negative to allow more flexibility
+            // Reduced negative weight for wrong direction to allow more flexibility
+            strafe_weight = -sqrtf(1.0f - dot * dot) * 0.3f; 
         }
         
         // Apply strafe weight

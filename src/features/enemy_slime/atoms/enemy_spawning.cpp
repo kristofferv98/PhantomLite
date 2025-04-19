@@ -108,14 +108,31 @@ enemies::EnemyRuntime spawn_enemy(Vector2 position, enemies::EnemyType type) {
             
             // Initialize behavior-specific parameters
             if (static_cast<int>(spec.behavior_flags & enemies::BehaviorFlags::WANDER_NOISE) != 0) {
-                new_enemy.wander_noise.radius = 200.0f;
-                new_enemy.wander_noise.sway_speed = 0.5f;
+                // Increase radius for more room to wander
+                new_enemy.wander_noise.radius = 250.0f;
+                // Reduce sway speed for smoother, more natural movement
+                new_enemy.wander_noise.sway_speed = 0.4f;
+                // Ensure spawn point is properly set
+                new_enemy.wander_noise.spawn_point = position;
+                // Set initial noise offsets to different random values to avoid synchronized movement
+                new_enemy.wander_noise.noise_offset_x = static_cast<float>(GetRandomValue(0, 1000)) / 100.0f;
+                new_enemy.wander_noise.noise_offset_y = static_cast<float>(GetRandomValue(0, 1000)) / 100.0f;
             }
             
             if (static_cast<int>(spec.behavior_flags & enemies::BehaviorFlags::STRAFE_TARGET) != 0) {
-                new_enemy.strafe_target.orbit_radius = 100.0f;
-                new_enemy.strafe_target.orbit_gain = 0.7f;
-                new_enemy.strafe_target.direction = GetRandomValue(0, 1) ? 1 : -1; // Random strafe direction
+                // Slightly smaller orbit radius for tighter circling
+                new_enemy.strafe_target.orbit_radius = 80.0f;
+                // Balanced gain to not overpower other behaviors
+                new_enemy.strafe_target.orbit_gain = 0.65f;
+                // Random orbit direction (1=clockwise, -1=counterclockwise)
+                new_enemy.strafe_target.direction = GetRandomValue(0, 1) ? 1 : -1;
+            }
+            
+            if (static_cast<int>(spec.behavior_flags & enemies::BehaviorFlags::SEPARATE_ALLIES) != 0) {
+                // Increased spacing to reduce clumping
+                new_enemy.separate_allies.desired_spacing = spec.radius * 3.5f;
+                // Increased separation gain to make this behavior strong
+                new_enemy.separate_allies.separation_gain = 1.4f;
             }
             
             if (static_cast<int>(spec.behavior_flags & enemies::BehaviorFlags::CHARGE_DASH) != 0) {
@@ -125,8 +142,10 @@ enemies::EnemyRuntime spawn_enemy(Vector2 position, enemies::EnemyType type) {
             }
             
             if (static_cast<int>(spec.behavior_flags & enemies::BehaviorFlags::AVOID_OBSTACLES) != 0) {
-                new_enemy.avoid_obstacle.lookahead_px = 100.0f;
-                new_enemy.avoid_obstacle.avoidance_gain = 1.0f;
+                // Increased lookahead distance for earlier detection
+                new_enemy.avoid_obstacle.lookahead_px = 120.0f;
+                // Strong avoidance gain to prioritize obstacle avoidance
+                new_enemy.avoid_obstacle.avoidance_gain = 1.7f;
             }
             
             TraceLog(LOG_INFO, "Spawned %s at position: (%.2f, %.2f)", spec.name.c_str(), position.x, position.y);

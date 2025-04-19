@@ -104,7 +104,8 @@ void spawn_slime(Vector2 position) {
 }
 
 bool hit_enemy_at(const Rectangle& hit_rect, const enemies::Hit& hit) {
-    return atoms::hit_enemy_at(hit_rect, hit);
+    // Use apply_damage_at directly from enemy_state
+    return atoms::apply_damage_at(hit_rect, hit);
 }
 
 void cleanup_enemies() {

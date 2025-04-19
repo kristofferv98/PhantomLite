@@ -4,6 +4,8 @@
 #include "behavior_atoms.hpp"
 #include "../enemy_slime.hpp"
 #include "../../world/world.hpp"
+#include "../../player/player.hpp"
+#include "../../enemies/behavior_atoms.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <random>
@@ -12,25 +14,11 @@ namespace enemy {
 namespace atoms {
 
 // Storage for all active enemy instances
-static std::vector<EnemyRuntime> enemies;
+static std::vector<enemies::EnemyRuntime> enemies;
 
-// Slime specifications according to WORLDBUILDING.MD
-static const EnemyStats SLIME_SPEC = {
-    .id = EnemyID::FOR_SLIME,
-    .size = {32.0f, 32.0f},  // 1x1 tile (32x32 pixels)
-    .hp = 2,                 // 2 pips of health
-    .dmg = 1,                // 1 pip of damage
-    .speed = 60.0f,          // 60 pixels per second
-    .behaviors = {BehaviorAtom::wander_random, BehaviorAtom::chase_player, BehaviorAtom::attack_player},
-    .drops = {DropChance{DropType::Heart, 30}, DropChance{DropType::Coin, 70}},
-    .animation_frames = 2,    // Slime has 2 animation frames
-    .radius = 16.0f,         // Collision radius (half of size)
-    .width = 32.0f,          // Sprite width
-    .height = 32.0f,         // Sprite height
-    .detection_radius = 200.0f, // Detection radius for chase behavior
-    .attack_radius = 50.0f,   // Attack radius
-    .attack_cooldown = 1.2f   // Attack cooldown in seconds
-};
+// Define slime specification
+// This will be initialized during the init_enemy_state function
+static enemies::EnemyStats slime_spec;
 
 void init_enemy_state() {
     // Clear any existing enemies
@@ -38,53 +26,145 @@ void init_enemy_state() {
     
     // Set random seed for reproducible behavior
     srand(42);
+    
+    // Initialize our slime specification
+    slime_spec.id = enemies::EnemyID::FOR_SLIME;
+    slime_spec.type = enemies::EnemyType::SLIME_SMALL;
+    slime_spec.name = "Forest Slime";
+    slime_spec.size = {32.0f, 32.0f};
+    slime_spec.hp = 2;
+    slime_spec.dmg = 1;
+    slime_spec.speed = 60.0f;
+    slime_spec.radius = 16.0f;
+    slime_spec.width = 32.0f;
+    slime_spec.height = 32.0f;
+    slime_spec.detection_radius = 200.0f;
+    slime_spec.attack_radius = 50.0f;
+    slime_spec.attack_cooldown = 1.2f;
+    slime_spec.animation_frames = 2;
+    
+    // Set behavior flags
+    slime_spec.behavior_flags = 
+        enemies::BehaviorFlags::WANDER_NOISE |
+        enemies::BehaviorFlags::BASIC_CHASE |
+        enemies::BehaviorFlags::MELEE_ATTACK |
+        enemies::BehaviorFlags::AVOID_OBSTACLES;
+        
+    // Define drops
+    slime_spec.drops = {
+        enemies::DropChance{enemies::DropType::Heart, 30}, 
+        enemies::DropChance{enemies::DropType::Coin, 70}
+    };
+}
+
+// Helper function for calculating distance
+float calculate_distance(const Vector2& a, const Vector2& b) {
+    float dx = b.x - a.x;
+    float dy = b.y - a.y;
+    return sqrtf(dx * dx + dy * dy);
 }
 
 // PERF: ~0.05-0.5ms depending on enemy count
 void update_enemy_states(float dt) {
+    Vector2 player_pos = player::get_position();
+    
     for (auto& enemy : enemies) {
         if (!enemy.active) continue;
         
         // Store original position for collision resolution and movement detection
         Vector2 original_pos = enemy.position;
-        Vector2 movement = {0, 0};
         
-        // Run behavior atoms
-        bool acted = false;
+        // Reset weights for this frame
+        enemy.reset_weights();
         
-        // First try attack_player behavior if available
-        if (std::find(enemy.spec->behaviors.begin(), enemy.spec->behaviors.end(), 
-                    BehaviorAtom::attack_player) != enemy.spec->behaviors.end()) {
-            BehaviorResult result = atoms::attack_player(enemy, dt);
-            if (result != BehaviorResult::Failed) {
-                acted = true;
+        // Check if enemy has the attack behavior and is in range
+        if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::MELEE_ATTACK) != 0) {
+            float dist_to_player = calculate_distance(enemy.position, player_pos);
+            
+            if (dist_to_player <= enemy.spec->attack_radius) {
+                // In attack range - try to attack
+                enemies::BehaviorResult result = 
+                    enemies::atoms::attack_melee(enemy, player_pos, dt);
+                    
+                if (result != enemies::BehaviorResult::Failed) {
+                    // Attack succeeded or is in progress, continue to next enemy
+                    enemy.is_moving = (enemy.position.x != original_pos.x || 
+                                     enemy.position.y != original_pos.y);
+                    continue;
+                }
             }
         }
         
-        // If not attacking, try chase_player behavior
-        if (!acted && std::find(enemy.spec->behaviors.begin(), enemy.spec->behaviors.end(), 
-                             BehaviorAtom::chase_player) != enemy.spec->behaviors.end()) {
-            BehaviorResult result = atoms::chase_player(enemy, dt);
-            if (result == BehaviorResult::Running) {
-                acted = true;
+        // If not attacking, determine movement behaviors
+        
+        // Chase behavior
+        if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::BASIC_CHASE) != 0) {
+            float dist_to_player = calculate_distance(enemy.position, player_pos);
+            
+            if (dist_to_player <= enemy.spec->detection_radius) {
+                // Player is within detection range - chase
+                enemies::atoms::apply_seek_weights(enemy, player_pos, 1.0f);
+            }
+        } else if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::ADVANCED_CHASE) != 0) {
+            float dist_to_player = calculate_distance(enemy.position, player_pos);
+            
+            if (dist_to_player <= enemy.spec->detection_radius) {
+                // Player is within detection range
+                if (dist_to_player > enemy.spec->attack_radius * 1.5f) {
+                    // Far enough - seek player
+                    enemies::atoms::apply_seek_weights(enemy, player_pos, 1.0f);
+                } else {
+                    // Close enough - strafe around player
+                    enemies::atoms::apply_strafe_weights(
+                        enemy, player_pos, 
+                        enemy.strafe_target.direction, 
+                        enemy.strafe_target.orbit_gain
+                    );
+                }
             }
         }
         
-        // If not chasing or attacking, try wander_random
-        if (!acted && std::find(enemy.spec->behaviors.begin(), enemy.spec->behaviors.end(), 
-                              BehaviorAtom::wander_random) != enemy.spec->behaviors.end()) {
-            atoms::wander_random(enemy, dt);
+        // Wander behavior (only if not chasing)
+        if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::WANDER_NOISE) != 0) {
+            float dist_to_player = calculate_distance(enemy.position, player_pos);
+            
+            if (dist_to_player > enemy.spec->detection_radius) {
+                // Not chasing player, apply wandering
+                enemies::atoms::wander_noise(enemy, dt);
+            }
         }
+        
+        // Obstacle avoidance (applied on top of other behaviors)
+        if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::AVOID_OBSTACLES) != 0) {
+            enemies::atoms::apply_obstacle_avoidance_weights(
+                enemy, 
+                enemy.avoid_obstacle.lookahead_px, 
+                enemy.avoid_obstacle.avoidance_gain
+            );
+        }
+        
+        // Separation from other enemies (optional)
+        if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::SEPARATE_ALLIES) != 0) {
+            enemies::atoms::apply_separation_weights(
+                enemy, 
+                enemies, 
+                enemy.separate_allies.desired_spacing, 
+                enemy.separate_allies.separation_gain
+            );
+        }
+        
+        // Apply the final movement
+        enemies::atoms::apply_context_steering(enemy, dt);
         
         // Reset enemy color if not attacking (usually red during attack)
         if (!enemy.attack.attacking) {
-            enemy.color = WHITE; // Changed to WHITE for sprite rendering
+            enemy.color = WHITE; // Default sprite color
         } else {
             // Use a more subtle red tint that works better with sprites
-            enemy.color = {255, 150, 150, 255}; // Light red tint instead of pure RED
+            enemy.color = {255, 150, 150, 255}; // Light red tint
         }
         
-        // Check world boundaries - using proper world bounds instead of screen bounds
+        // Check world boundaries - using proper world bounds
         float min_x, min_y, max_x, max_y;
         world::get_world_bounds(&min_x, &min_y, &max_x, &max_y);
         
@@ -121,23 +201,17 @@ void update_enemy_states(float dt) {
             enemy.anim_frame = (enemy.anim_frame + 1) % enemy.spec->animation_frames;
         }
     }
-    
-    // Remove dead enemies (cleanup will be called separately)
 }
 
-void add_enemy(const EnemyRuntime& enemy) {
+void add_enemy(const enemies::EnemyRuntime& enemy) {
     enemies.push_back(enemy);
 }
 
-const std::vector<EnemyRuntime>& get_enemies() {
-    return enemies;
-}
-
 void cleanup_inactive_enemies() {
-    // Remove dead enemies (move to end and erase)
     enemies.erase(
-        std::remove_if(enemies.begin(), enemies.end(), 
-            [](const EnemyRuntime& enemy) { return !enemy.active || enemy.hp <= 0; }),
+        std::remove_if(enemies.begin(), enemies.end(), [](const enemies::EnemyRuntime& enemy) {
+            return !enemy.active || enemy.hp <= 0;
+        }),
         enemies.end()
     );
 }
@@ -146,49 +220,49 @@ int get_active_enemy_count() {
     return enemies.size();
 }
 
-bool apply_damage_at(const Rectangle& hit_rect, const Hit& hit) {
-    // Check each enemy for collision with the hit rectangle
+bool apply_damage_at(const Rectangle& hit_rect, const enemies::Hit& hit) {
+    bool any_hit = false;
+    
     for (auto& enemy : enemies) {
-        if (!enemy.active || enemy.hp <= 0) continue;
-        
-        // Check if hit rectangle intersects with enemy collision rectangle
-        if (CheckCollisionRecs(hit_rect, enemy.collision_rect)) {
-            // Enemy takes damage
+        if (CheckCollisionRecs(enemy.collision_rect, hit_rect)) {
+            // Apply the hit using the on_hit method if available
             enemy.hp -= hit.dmg;
             
-            // Apply knockback (if any)
-            enemy.position.x += hit.knockback.x;
-            enemy.position.y += hit.knockback.y;
+            // Apply knockback - use the direction from the hit
+            // This applies a force in the direction specified in the hit struct
+            enemy.knockback = hit.knockback;
+            enemy.knockback_direction = hit.direction;
             
-            // Update collision rectangle
-            enemy.collision_rect.x = enemy.position.x - enemy.spec->size.x/2;
-            enemy.collision_rect.y = enemy.position.y - enemy.spec->size.y/2;
-            
-            // Check if enemy is killed
+            // If enemy health is <= 0, mark as inactive for cleanup
             if (enemy.hp <= 0) {
-                // Enemy is dead - check for drops
-                // This logic will move to a separate atom later
-                TraceLog(LOG_INFO, "Enemy dropped: Heart");
-                TraceLog(LOG_INFO, "Enemy dropped: Coin");
-                
-                // Mark as inactive - will be cleaned up in cleanup_inactive_enemies
                 enemy.active = false;
             }
             
-            return true; // Hit successful
+            any_hit = true;
         }
     }
     
-    return false; // No hit
+    return any_hit;
+}
+
+const std::vector<enemies::EnemyRuntime>& get_enemies() {
+    return enemies;
+}
+
+std::vector<enemies::EnemyRuntime>& get_enemies_mutable() {
+    return enemies;
 }
 
 void clear_enemies() {
     enemies.clear();
 }
 
-const EnemyStats& get_slime_spec() {
-    return SLIME_SPEC;
+const enemies::EnemyStats& get_slime_spec() {
+    return slime_spec;
 }
 
 } // namespace atoms
 } // namespace enemy 
+
+
+

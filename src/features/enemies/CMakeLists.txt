@@ -27,3 +27,4 @@ set_target_properties(enemies_feature PROPERTIES
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 ) 
+

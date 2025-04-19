@@ -2,6 +2,7 @@
 #include "world.hpp"
 #include "atoms/tilemap.hpp"
 #include "atoms/camera.hpp"
+#include "atoms/obstacle_detector.hpp"
 #include <memory>
 
 namespace world {
@@ -10,11 +11,15 @@ namespace {
     // Private implementation details
     std::unique_ptr<atoms::Tilemap> tilemap;
     std::unique_ptr<atoms::Camera> camera;
+    std::unique_ptr<atoms::ObstacleDetector> obstacle_detector;
     
     // Map configuration
     constexpr int MAP_WIDTH = 50;
     constexpr int MAP_HEIGHT = 50;
     constexpr int TILE_SIZE = 32;
+    
+    // Debug flags
+    bool show_obstacle_debug = false;
 }
 
 void init() {
@@ -34,6 +39,10 @@ void init() {
         MAP_WIDTH * TILE_SIZE,
         MAP_HEIGHT * TILE_SIZE
     );
+    
+    // Initialize obstacle detector
+    obstacle_detector = std::make_unique<atoms::ObstacleDetector>();
+    obstacle_detector->init(tilemap.get());
 }
 
 void update(float dt) {
@@ -45,6 +54,11 @@ void update(float dt) {
 void render() {
     if (tilemap && camera) {
         tilemap->render(camera->get_view());
+        
+        // Draw obstacle debug visualization if enabled
+        if (show_obstacle_debug && obstacle_detector) {
+            obstacle_detector->draw_debug(true);
+        }
     }
 }
 
@@ -55,6 +69,7 @@ void cleanup() {
     }
     
     camera.reset();
+    obstacle_detector.reset();
 }
 
 void set_camera_target(const Vector2& target) {
@@ -91,6 +106,40 @@ Vector2 world_to_screen(const Vector2& world_pos) {
         return camera->world_to_screen(world_pos);
     }
     return world_pos; // Default if no camera
+}
+
+// NEW: Obstacle detection functions implementation
+
+float raycast(Vector2 origin, Vector2 direction, float max_distance) {
+    if (obstacle_detector) {
+        atoms::RaycastHit hit = obstacle_detector->raycast(origin, direction, max_distance);
+        return hit.hit ? hit.distance : max_distance;
+    }
+    return max_distance;
+}
+
+void get_steering_distances(Vector2 position, float* out_distances, int num_rays, float max_distance) {
+    if (obstacle_detector && out_distances) {
+        obstacle_detector->create_steering_grid(position, out_distances, num_rays, max_distance);
+    }
+}
+
+bool check_circle_collision(Vector2 center, float radius) {
+    if (obstacle_detector) {
+        return obstacle_detector->check_circle_overlap(center, radius);
+    }
+    return false;
+}
+
+bool check_rect_collision(Rectangle rect) {
+    if (obstacle_detector) {
+        return obstacle_detector->check_rect_overlap(rect);
+    }
+    return false;
+}
+
+void toggle_obstacle_debug() {
+    show_obstacle_debug = !show_obstacle_debug;
 }
 
 }  // namespace world 

@@ -14,3 +14,4 @@ This slice contains everything related to the Forest Slime enemies:
 - Debug visualization tools
 
 The slime uses a behavior-based AI system where different atomic behaviors (wander, chase, attack) are composed to create more complex enemy interactions. Slimes detect the player within a certain radius, chase when detected, and attack when in range. 
+

@@ -54,16 +54,27 @@ void EnemyRuntime::on_hit(const Hit& hit) {
     // Apply damage
     hp -= hit.dmg;
     
-    // Apply knockback if any
-    if (hit.knockback.x != 0 || hit.knockback.y != 0) {
-        // Simple knockback - could be more complex with physics
-        position.x += hit.knockback.x * 10.0f;
-        position.y += hit.knockback.y * 10.0f;
-        
-        // Update collision rectangle
-        collision_rect.x = position.x - spec->size.x/2;
-        collision_rect.y = position.y - spec->size.y/2;
+    // Calculate knockback direction (away from source)
+    Vector2 knockback_dir = { position.x - hit.source_position.x, position.y - hit.source_position.y };
+
+    // Normalize the direction
+    float dir_len = sqrtf(knockback_dir.x * knockback_dir.x + knockback_dir.y * knockback_dir.y);
+    if (dir_len > 0) {
+        knockback_dir.x /= dir_len;
+        knockback_dir.y /= dir_len;
+    } else {
+        // Default direction if source is exactly at enemy position (unlikely)
+        // Push right as a fallback
+        knockback_dir = {1.0f, 0.0f};
     }
+
+    // Apply knockback impulse based on magnitude and direction
+    position.x += knockback_dir.x * hit.knockback_magnitude;
+    position.y += knockback_dir.y * hit.knockback_magnitude;
+    
+    // Update collision rectangle AFTER applying knockback
+    collision_rect.x = position.x - spec->size.x/2;
+    collision_rect.y = position.y - spec->size.y/2;
     
     // Flash color to indicate hit
     color = RED;
@@ -86,6 +97,7 @@ void EnemyRuntime::on_hit(const Hit& hit) {
     if (hp <= 0) {
         // Mark as inactive
         active = false;
+        TraceLog(LOG_INFO, "Enemy died!");
     }
 }
 

@@ -68,9 +68,12 @@ TEST_CASE("Enemy damage and death", "[enemy][slime][hit]") {
     
     // Create a hit in the same position
     Rectangle hit_rect = {test_pos.x - 16, test_pos.y - 16, 32, 32};
+    // Mock an attack coming from 20px to the left of the enemy
+    Vector2 mock_source_pos = {test_pos.x - 20.0f, test_pos.y};
     enemy::Hit hit = {
         .dmg = 1,
-        .knockback = {10.0f, 0.0f},
+        .knockback_magnitude = 10.0f,
+        .source_position = mock_source_pos,
         .type = enemy::Hit::Type::Melee
     };
     

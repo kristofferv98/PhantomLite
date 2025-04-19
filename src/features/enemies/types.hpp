@@ -129,7 +129,8 @@ struct EnemyStats {
 /// Damage application structure
 struct Hit {
     int dmg;                                      // Damage amount
-    Vector2 knockback;                            // Knockback force
+    float knockback_magnitude;                    // NEW: Base magnitude of knockback force
+    Vector2 source_position;                      // NEW: Position where the hit originated from
     enum class Type { 
         Melee, 
         Arrow, 

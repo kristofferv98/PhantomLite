@@ -169,9 +169,14 @@ void take_damage(int enemy_id, int damage) {
         return;
     }
     
+    // Get player position for knockback direction
+    Vector2 player_pos = player::get_position();
+    
     // Apply damage
     enemies::Hit hit;
     hit.dmg = damage;
+    hit.knockback_magnitude = 25.0f; // Medium strength knockback
+    hit.source_position = player_pos; // Knockback away from player
     hit.type = enemies::Hit::Type::Melee;
     enemies[enemy_id].on_hit(hit);
 }

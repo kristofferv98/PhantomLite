@@ -68,10 +68,14 @@ int main() {
             // Get player attack rectangle
             Rectangle attack_rect = player::get_attack_rect();
             
-            // Create a hit
+            // Get player position for directional knockback
+            Vector2 player_pos = player::get_position();
+            
+            // Create a hit with directional knockback
             enemy::Hit hit = {
                 .dmg = 1,
-                .knockback = {10.0f, 0.0f}, // TODO: Make knockback based on player facing
+                .knockback_magnitude = 50.0f, // Adjust this value for desired force
+                .source_position = player_pos,
                 .type = enemy::Hit::Type::Melee
             };
             

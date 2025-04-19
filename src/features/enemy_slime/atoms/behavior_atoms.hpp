@@ -40,17 +40,9 @@ enemies::BehaviorResult attack_player(enemies::EnemyRuntime& enemy, float dt);
 /// Get the time elapsed since startup (used for animations, etc.)
 float get_elapsed_time();
 
-/// Make enemy wander randomly
-/// Returns true if successfully changed position
-bool wander_random(EnemyRuntime& enemy, float dt);
-
-/// Make enemy chase the player
-/// Returns true if successfully moved toward player
-bool chase_player(EnemyRuntime& enemy, Vector2 player_pos, float dt);
-
-/// Make enemy attack the player when in range
-/// Returns true if attack was executed successfully
-bool attack_player(EnemyRuntime& enemy, Vector2 player_pos, float dt);
+/// Attack the player when in range using the core entity adapter
+/// Returns true if attack was attempted successfully
+bool attack_player_with_adapter(EnemyRuntime& enemy, Vector2 player_pos, float dt);
 
 /// Toggle debug visualization for enemy behaviors
 void toggle_debug_visualization();

@@ -5,6 +5,7 @@
 #include "../../player/player.hpp"
 #include "../../enemies/behavior_atoms.hpp"
 #include "../../world/world.hpp"
+#include "../../core/public/entity.hpp"
 #include <cmath>
 #include <raymath.h>
 
@@ -181,7 +182,8 @@ enemies::BehaviorResult attack_player(enemies::EnemyRuntime& enemy, float dt) {
     return enemies::atoms::attack_melee(enemy, player_pos, dt);
 }
 
-BehaviorResult attack_player(EnemyRuntime& enemy, Vector2 player_pos, float dt) {
+// Function renamed to avoid overloading with different return types
+bool attack_player_with_adapter(EnemyRuntime& enemy, Vector2 player_pos, float dt) {
     // Get access to the attack module
     auto& attack = enemy.attack;
     
@@ -191,7 +193,7 @@ BehaviorResult attack_player(EnemyRuntime& enemy, Vector2 player_pos, float dt) 
         if (attack.timer >= attack.cooldown) {
             attack.can_attack = true;
         }
-        return BehaviorResult::Failed;
+        return false;
     }
     
     // Calculate distance to player
@@ -202,47 +204,26 @@ BehaviorResult attack_player(EnemyRuntime& enemy, Vector2 player_pos, float dt) 
     // If within attack range, try to attack
     if (dist_to_player <= attack.attack_radius) {
         // Call the common attack_melee function which will create the attack rectangle
-        BehaviorResult result = enemies::atoms::attack_melee(enemy, player_pos, dt);
+        enemies::BehaviorResult result = enemies::atoms::attack_melee(enemy, player_pos, dt);
         
         // If the attack started or is in progress, apply damage
-        if (result == BehaviorResult::Running && enemy.attack_melee.attacking) {
-            // Create attack rectangle in the direction of the player
-            Rectangle attack_rect = {
-                enemy.position.x - enemy.spec->size.x/2,
-                enemy.position.y - enemy.spec->size.y/2,
-                enemy.spec->size.x,
-                enemy.spec->size.y
-            };
-            
-            // Extend the attack rectangle in the facing direction
-            float attack_extend = 20.0f; // How far the attack reaches
-            switch (enemy.facing) {
-                case enemies::Facing::RIGHT:
-                    attack_rect.x += enemy.spec->size.x/2;
-                    attack_rect.width = attack_extend;
-                    break;
-                case enemies::Facing::LEFT:
-                    attack_rect.x -= attack_extend;
-                    attack_rect.width = attack_extend;
-                    break;
-                case enemies::Facing::DOWN:
-                    attack_rect.y += enemy.spec->size.y/2;
-                    attack_rect.height = attack_extend;
-                    break;
-                case enemies::Facing::UP:
-                    attack_rect.y -= attack_extend;
-                    attack_rect.height = attack_extend;
-                    break;
+        if (result == enemies::BehaviorResult::Running && enemy.attack_melee.attacking) {
+            // Calculate normalized direction to player for knockback
+            Vector2 attack_dir = {dx, dy};
+            float len = sqrtf(attack_dir.x * attack_dir.x + attack_dir.y * attack_dir.y);
+            if (len > 0) {
+                attack_dir.x /= len;
+                attack_dir.y /= len;
             }
             
-            // Apply damage to player
-            enemy::atoms::apply_player_damage(attack_rect, enemy.spec->dmg, enemy.position);
+            // Apply damage using the core entity adapter
+            core::entity::damage_player(enemy.spec->dmg, attack_dir);
         }
         
-        return result;
+        return true; // Attack was attempted
     }
     
-    return BehaviorResult::Failed;
+    return false; // Couldn't attack
 }
 
 void toggle_debug_visualization() {

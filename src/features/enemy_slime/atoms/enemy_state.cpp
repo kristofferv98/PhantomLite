@@ -83,7 +83,7 @@ void update_enemy_states(float dt) {
             
             if (dist_to_player <= enemy.spec->attack_radius) {
                 // In attack range - try to attack
-                bool attack_success = attack_player(enemy, player_pos, dt);
+                bool attack_success = attack_player_with_adapter(enemy, player_pos, dt);
                     
                 if (attack_success) {
                     // Attack succeeded or is in progress, continue to next enemy

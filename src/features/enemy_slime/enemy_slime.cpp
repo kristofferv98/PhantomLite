@@ -4,16 +4,23 @@
 #include "atoms/behavior_atoms.hpp"
 #include "atoms/enemy_state.hpp"
 #include "atoms/enemy_renderer.hpp"
-#include "atoms/enemy_combat.hpp"
-#include "atoms/enemy_spawner.hpp"
+#include "atoms/enemy_spawning.hpp"
 #include "../player/player.hpp"
 #include "../world/world.hpp"
+#include "core/public/entity.hpp"
 // Include raylib directly instead of the missing raylib_ext.hpp
 #include "raylib.h"
 #include <algorithm>
 #include <cmath>
 #include <random>
 #include <vector>
+
+// Helper function for calculating distance
+float calculate_distance(const Vector2& a, const Vector2& b) {
+    float dx = b.x - a.x;
+    float dy = b.y - a.y;
+    return sqrtf(dx * dx + dy * dy);
+}
 
 // Get player position from player module instead of screen center
 Vector2 get_player_position() {
@@ -22,58 +29,15 @@ Vector2 get_player_position() {
 
 namespace enemy {
 
-// Slime specifications according to WORLDBUILDING.MD
-static const EnemySpec SLIME_SPEC = {
-    .id = EnemyID::FOR_SLIME,
-    .size = {32.0f, 32.0f},  // 1x1 tile (32x32 pixels)
-    .hp = 2,                 // 2 pips of health
-    .dmg = 1,                // 1 pip of damage
-    .speed = 60.0f,          // 60 pixels per second
-    .behaviors = {BehaviorAtom::wander_random, BehaviorAtom::chase_player, BehaviorAtom::attack_player},
-    .drops = {DropChance{DropType::Heart, 30}, DropChance{DropType::Coin, 70}},
-    .animation_frames = 2,    // Slime has 2 animation frames
-    .radius = 16.0f,         // Collision radius (half of size)
-    .width = 32.0f,          // Sprite width
-    .height = 32.0f,         // Sprite height
-    .detection_radius = 200.0f, // Detection radius for chase behavior
-    .attack_radius = 50.0f,   // Attack radius
-    .attack_cooldown = 1.2f   // Attack cooldown in seconds
-};
-
-// Storage for all active slime instances
-static std::vector<EnemyInstance> slimes;
-
-// Animation frame time
-static const float ANIMATION_FRAME_TIME = 0.25f; // Seconds per frame
-
-// Texture for slime sprites
-static Texture2D slime_texture;
-static Texture2D slime_squash_texture;
-
 // Debug visualization flag
 static bool show_debug = false;
-
-// Constructor implementation for EnemyInstance
-EnemyInstance::EnemyInstance(const EnemySpec& spec_ref, Vector2 pos)
-    : spec(&spec_ref), 
-      position(pos), 
-      hp(spec_ref.hp), 
-      collision_rect({pos.x - spec_ref.size.x/2, pos.y - spec_ref.size.y/2, spec_ref.size.x, spec_ref.size.y}),
-      color(GREEN),
-      wander(100.0f, 1.0f),  // Wander within 100px, idle for 1s
-      chase(200.0f),         // Detect player within 200px
-      attack(50.0f, 1.2f),   // Attack within 50px, cooldown 1.2s
-      active(true),
-      anim_timer(0.0f),
-      anim_frame(0),
-      is_moving(false) {}
+static bool show_steering_debug = false;
 
 // Initialize the enemy system
 void init_enemies() {
     atoms::init_enemy_state();
     atoms::init_renderer();
-    atoms::init_combat();
-    atoms::init_spawner();
+    atoms::init_spawning();
 }
 
 // PERF: ~0.05-0.5ms depending on enemy count
@@ -83,11 +47,28 @@ void update_enemies(float dt) {
 
 // Demo function to spawn multiple slimes and show behavior
 void spawn_demo_slimes(int count) {
-    atoms::spawn_demo_slimes(count);
+    // Use the atomic function for spawning multiple enemies
+    Vector2 player_pos = player::get_position();
+    std::vector<enemies::EnemyRuntime> enemies = atoms::get_enemies();
+    
+    // Spawn new enemies around the player
+    atoms::spawn_enemies_around_player(player_pos, 10.0f, enemies, count);
+    
+    // Clear existing enemies and add the new ones
+    atoms::clear_enemies();
+    for (const auto& enemy : enemies) {
+        atoms::add_enemy(enemy);
+    }
 }
 
 void toggle_debug_info() {
     atoms::toggle_debug_visualization();
+    show_debug = atoms::is_debug_visualization_enabled();
+}
+
+void toggle_steering_debug() {
+    atoms::toggle_steering_debug();
+    show_steering_debug = atoms::is_steering_debug_enabled();
 }
 
 void toggle_debug() {
@@ -96,10 +77,15 @@ void toggle_debug() {
 
 void set_debug(bool enabled) {
     atoms::set_debug_visualization(enabled);
+    show_debug = enabled;
 }
 
 bool is_debug_enabled() {
     return atoms::is_debug_visualization_enabled();
+}
+
+bool is_steering_debug_enabled() {
+    return atoms::is_steering_debug_enabled();
 }
 
 int get_enemy_count() {
@@ -112,19 +98,22 @@ void render_enemies() {
 }
 
 void spawn_slime(Vector2 position) {
-    atoms::spawn_slime_at(position);
+    // Create a slime at the given position using spawn_enemy
+    enemies::EnemyRuntime slime = atoms::spawn_enemy(position, enemies::EnemyType::SLIME_SMALL);
+    atoms::add_enemy(slime);
 }
 
-bool hit_enemy_at(const Rectangle& hit_rect, const Hit& hit) {
+bool hit_enemy_at(const Rectangle& hit_rect, const enemies::Hit& hit) {
     return atoms::hit_enemy_at(hit_rect, hit);
 }
 
 void cleanup_enemies() {
     atoms::cleanup_renderer();
     atoms::clear_enemies();
+    atoms::cleanup_spawning();
 }
 
-const EnemyStats& get_slime_spec() {
+const enemies::EnemyStats& get_slime_spec() {
     return atoms::get_slime_spec();
 }
 
@@ -143,6 +132,47 @@ void render() {
 
 void cleanup() {
     cleanup_enemies();
+}
+
+bool check_player_collision(Vector2 position, float radius, int* enemy_id) {
+    // Implementation maintained for backward compatibility
+    
+    // Get all enemies
+    const auto& enemies = atoms::get_enemies();
+    
+    // Check collision with each enemy
+    for (size_t i = 0; i < enemies.size(); i++) {
+        const auto& enemy = enemies[i];
+        if (!enemy.active) continue;
+        
+        // Check circle collision
+        float dist = calculate_distance(position, enemy.position);
+        if (dist < radius + enemy.spec->radius) {
+            // Collision detected
+            if (enemy_id) *enemy_id = static_cast<int>(i);
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+void take_damage(int enemy_id, int damage) {
+    // Implementation maintained for backward compatibility
+    
+    // Get mutable reference to enemies
+    auto& enemies = atoms::get_enemies_mutable();
+    
+    // Validate index
+    if (enemy_id < 0 || enemy_id >= static_cast<int>(enemies.size())) {
+        return;
+    }
+    
+    // Apply damage
+    enemies::Hit hit;
+    hit.dmg = damage;
+    hit.type = enemies::Hit::Type::Melee;
+    enemies[enemy_id].on_hit(hit);
 }
 
 } // namespace enemy 

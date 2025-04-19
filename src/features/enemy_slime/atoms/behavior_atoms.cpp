@@ -206,8 +206,11 @@ bool attack_player_with_adapter(EnemyRuntime& enemy, Vector2 player_pos, float d
         // Call the common attack_melee function which will create the attack rectangle
         enemies::BehaviorResult result = enemies::atoms::attack_melee(enemy, player_pos, dt);
         
-        // If the attack started or is in progress, apply damage
-        if (result == enemies::BehaviorResult::Running && enemy.attack_melee.attacking) {
+        // If the attack started or is in progress, apply damage (only once per attack)
+        if (result == enemies::BehaviorResult::Running && 
+            enemy.attack_melee.attacking && 
+            !enemy.attack_melee.damage_applied) {
+            
             // Calculate normalized direction to player for knockback
             Vector2 attack_dir = {dx, dy};
             float len = sqrtf(attack_dir.x * attack_dir.x + attack_dir.y * attack_dir.y);
@@ -218,6 +221,12 @@ bool attack_player_with_adapter(EnemyRuntime& enemy, Vector2 player_pos, float d
             
             // Apply damage using the core entity adapter
             core::entity::damage_player(enemy.spec->dmg, attack_dir);
+            
+            // Mark damage as applied for this attack sequence
+            enemy.attack_melee.damage_applied = true;
+            
+            // Log that damage was applied
+            TraceLog(LOG_INFO, "Damage applied to player: %d", enemy.spec->dmg);
         }
         
         return true; // Attack was attempted

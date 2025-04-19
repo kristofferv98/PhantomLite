@@ -283,6 +283,8 @@ BehaviorResult attack_melee(EnemyRuntime& enemy, Vector2 target, float dt) {
         melee.attack_timer += dt;
         if (melee.attack_timer >= melee.attack_duration) {
             melee.attacking = false;
+            // Reset damage_applied flag when attack ends
+            melee.damage_applied = false;
             return BehaviorResult::Completed;
         }
         return BehaviorResult::Running;
@@ -295,6 +297,7 @@ BehaviorResult attack_melee(EnemyRuntime& enemy, Vector2 target, float dt) {
         melee.attacking = true;
         melee.can_attack = false;
         melee.attack_timer = 0.0f;
+        melee.damage_applied = false; // Reset damage_applied flag when attack starts
         
         // Calculate direction to target and set facing
         Vector2 attack_dir = normalize(direction_to(enemy.position, target));

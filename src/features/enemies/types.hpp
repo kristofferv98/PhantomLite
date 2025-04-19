@@ -4,6 +4,7 @@
 #include <array>
 #include <vector>
 #include <cmath>
+#include <string>
 
 namespace enemies {
 
@@ -33,6 +34,18 @@ enum class DropType {
 struct DropChance {
     DropType type;
     int chance; // Percentage (0-100)
+};
+
+/// Enemy type enum for determining appearance
+enum class EnemyType {
+    SLIME_SMALL,
+    SLIME_MEDIUM,
+    SLIME_LARGE,
+    BOAR,
+    BAT,
+    SCARAB,
+    WOLF,
+    DRONE
 };
 
 /// Behavior building blocks that can be composed
@@ -68,15 +81,41 @@ enum class Facing {
     RIGHT
 };
 
+/// Behavior flags for enabling specific behaviors
+enum class BehaviorFlags {
+    NONE              = 0,
+    WANDER_NOISE      = 1 << 0,
+    BASIC_CHASE       = 1 << 1,
+    ADVANCED_CHASE    = 1 << 2,
+    STRAFE_TARGET     = 1 << 3,
+    SEPARATE_ALLIES   = 1 << 4,
+    AVOID_OBSTACLES   = 1 << 5,
+    CHARGE_DASH       = 1 << 6,
+    RANGED_ATTACK     = 1 << 7,
+    MELEE_ATTACK      = 1 << 8,
+    ARMOR_GATE        = 1 << 9
+};
+
+/// Enable bitwise operations on BehaviorFlags
+inline BehaviorFlags operator|(BehaviorFlags a, BehaviorFlags b) {
+    return static_cast<BehaviorFlags>(static_cast<int>(a) | static_cast<int>(b));
+}
+
+inline BehaviorFlags operator&(BehaviorFlags a, BehaviorFlags b) {
+    return static_cast<BehaviorFlags>(static_cast<int>(a) & static_cast<int>(b));
+}
+
 /// Static data for an enemy type as defined in WORLDBUILDING.MD §5.1
 struct EnemyStats {
     EnemyID id;                                   // Unique identifier for this enemy type
+    EnemyType type;                               // Type of enemy (visual & behavior)
+    std::string name;                             // Descriptive name
     Vector2 size;                                 // Size in pixels (collision dimensions)
     int hp;                                       // Hit points
     int dmg;                                      // Damage per hit
     float speed;                                  // Movement speed in pixels/second
     std::vector<BehaviorAtom> behaviors;          // Composed behavior atoms
-    std::array<DropChance, 2> drops;              // Drop chances
+    std::vector<DropChance> drops;                // Drop chances
     int animation_frames;                         // Number of animation frames
     float radius;                                 // Collision radius
     float width;                                  // Visual width
@@ -84,6 +123,7 @@ struct EnemyStats {
     float detection_radius;                       // How far enemy can detect player
     float attack_radius;                          // Attack range
     float attack_cooldown;                        // Time between attacks
+    BehaviorFlags behavior_flags = BehaviorFlags::NONE; // Behavior flags
 };
 
 /// Damage application structure
@@ -198,6 +238,7 @@ struct AttackMelee {
     bool attacking = false;                       // Whether currently attacking
     float attack_duration = 0.3f;                 // Duration of attack animation
     float attack_timer = 0.0f;                    // Current attack animation timer
+    bool damage_applied = false;                  // Track if damage has been applied during this attack
 };
 
 /// Result of a behavior atom execution

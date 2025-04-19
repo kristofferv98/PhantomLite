@@ -43,13 +43,14 @@ void init_enemy_state() {
     slime_spec.attack_cooldown = 1.2f;
     slime_spec.animation_frames = 2;
     
-    // Set behavior flags
+    // Set behavior flags - Added STRAFE_TARGET for more interesting movement
     slime_spec.behavior_flags = 
         enemies::BehaviorFlags::WANDER_NOISE |
         enemies::BehaviorFlags::BASIC_CHASE |
         enemies::BehaviorFlags::MELEE_ATTACK |
         enemies::BehaviorFlags::SEPARATE_ALLIES |
-        enemies::BehaviorFlags::AVOID_OBSTACLES;
+        enemies::BehaviorFlags::AVOID_OBSTACLES |
+        enemies::BehaviorFlags::STRAFE_TARGET;  // Added strafing behavior
         
     // Define drops
     slime_spec.drops = {
@@ -78,12 +79,22 @@ void update_enemy_states(float dt) {
         // Reset weights for this frame
         enemy.reset_weights();
         
-        bool is_attacking = false;
+        // Reset behavior activation states
+        enemy.chase.chasing = false;
+        enemy.strafe_target.active = false;
         
-        // Check if enemy has the attack behavior and is in range
+        bool is_attacking = false;
+        float dist_to_player = calculate_distance(enemy.position, player_pos);
+        
+        // STATE PRIORITY ORDER:
+        // 1. Melee Attack (if in range)
+        // 2. Charge Dash (if available and close)
+        // 3. Strafe (if medium range)
+        // 4. Chase (if in detection range)
+        // 5. Wander (default)
+        
+        // Attack check
         if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::MELEE_ATTACK) != 0) {
-            float dist_to_player = calculate_distance(enemy.position, player_pos);
-            
             if (dist_to_player <= enemy.spec->attack_radius) {
                 // In attack range - try to attack
                 enemies::BehaviorResult result = attack_player(enemy, dt);
@@ -95,50 +106,58 @@ void update_enemy_states(float dt) {
             }
         }
         
-        // If not attacking, determine movement behaviors 
+        // If not attacking, determine movement behaviors
         if (!is_attacking) {
-            // Chase behavior
-            if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::BASIC_CHASE) != 0) {
-                float dist_to_player = calculate_distance(enemy.position, player_pos);
-                
-                if (dist_to_player <= enemy.spec->detection_radius) {
-                    // Player is within detection range - chase
-                    chase_player(enemy, dt);
-                }
-            } else if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::ADVANCED_CHASE) != 0) {
-                float dist_to_player = calculate_distance(enemy.position, player_pos);
-                
-                if (dist_to_player <= enemy.spec->detection_radius) {
-                    // Player is within detection range
-                    if (dist_to_player > enemy.spec->attack_radius * 1.5f) {
-                        // Far enough - seek player
-                        chase_player(enemy, dt);
-                    } else {
-                        // Close enough - strafe around player
-                        strafe_player(enemy, dt);
+            bool is_steering = false;
+            
+            // Advanced chase with charge dash (if equipped)
+            if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::CHARGE_DASH) != 0) {
+                if (dist_to_player <= enemy.spec->detection_radius * 0.8f && 
+                    dist_to_player > enemy.spec->attack_radius * 1.2f && 
+                    (rand() % 100) < 3) { // 3% chance to initiate dash when in range
+                    
+                    // Try charge dash
+                    enemies::BehaviorResult result = enemies::atoms::charge_dash(enemy, player_pos, dt);
+                    if (result == enemies::BehaviorResult::Running) {
+                        is_steering = true;
                     }
                 }
             }
             
-            // Strafe behavior (if not already chasing at a close distance)
-            if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::STRAFE_TARGET) != 0) {
-                float dist_to_player = calculate_distance(enemy.position, player_pos);
+            // Strafe behavior (medium range)
+            if (!is_steering && 
+                static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::STRAFE_TARGET) != 0) {
                 
-                if (dist_to_player <= enemy.spec->detection_radius && 
-                    dist_to_player > enemy.spec->attack_radius * 1.5f && 
+                if (dist_to_player <= enemy.spec->detection_radius * 0.8f && 
+                    dist_to_player > enemy.spec->attack_radius * 1.2f && 
                     dist_to_player < enemy.spec->detection_radius * 0.7f) {
                     
-                    // Close enough to strafe but not close enough to attack
-                    strafe_player(enemy, dt);
+                    // Try strafing (orbit around player)
+                    enemies::BehaviorResult result = strafe_player(enemy, dt);
+                    if (result == enemies::BehaviorResult::Running) {
+                        is_steering = true;
+                    }
                 }
             }
             
-            // Wander behavior (only if not chasing)
-            if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::WANDER_NOISE) != 0) {
-                float dist_to_player = calculate_distance(enemy.position, player_pos);
+            // Basic chase (if in detection range and not currently strafing)
+            if (!is_steering && 
+                (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::BASIC_CHASE) != 0 ||
+                 static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::ADVANCED_CHASE) != 0)) {
                 
-                // Always have some wander, but reduce influence when chasing
-                float wander_strength = (dist_to_player > enemy.spec->detection_radius) ? 1.0f : 0.3f;
+                if (dist_to_player <= enemy.spec->detection_radius) {
+                    // Player is within detection range - chase
+                    enemies::BehaviorResult result = chase_player(enemy, dt);
+                    if (result == enemies::BehaviorResult::Running) {
+                        is_steering = true;
+                    }
+                }
+            }
+            
+            // Wander behavior (always apply but with lower weight when another behavior is active)
+            if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::WANDER_NOISE) != 0) {
+                // Always have some wander, but reduce influence when another behavior is active
+                float wander_strength = is_steering ? 0.3f : 1.0f;
                 
                 // Apply wandering with noise
                 if (wander_strength > 0.0f) {
@@ -146,18 +165,18 @@ void update_enemy_states(float dt) {
                 }
             }
             
-            // Obstacle avoidance (applied on top of other behaviors)
+            // Obstacle avoidance (critical, should always be applied)
             if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::AVOID_OBSTACLES) != 0) {
                 avoid_obstacles(enemy, dt);
             }
             
-            // Separation from other enemies
+            // Separation from other enemies (critical, should always be applied)
             if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::SEPARATE_ALLIES) != 0) {
                 separate_from_allies(enemy, dt);
             }
             
             // Apply the final context steering movement
-            enemies::atoms::apply_steering_movement(enemy, dt);
+            enemies::atoms::apply_context_steering(enemy, dt);
         }
         
         // Reset enemy color if not attacking (usually red during attack)

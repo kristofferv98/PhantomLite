@@ -329,9 +329,7 @@ struct EnemyRuntime {
     
     // NEW: Reset all steering weights to zero
     void reset_weights() {
-        for (int i = 0; i < NUM_RAYS; i++) {
-            weights[i] = 0.0f;
-        }
+        std::fill(weights.begin(), weights.end(), 0.0f);
     }
     
     // NEW: Get the ray direction vector for a given ray index

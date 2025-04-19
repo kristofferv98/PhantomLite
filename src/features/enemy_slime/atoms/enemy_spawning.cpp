@@ -12,8 +12,8 @@
 
 namespace enemy::atoms {
 
-// Cached enemy specifications
-static std::vector<enemies::EnemyStats> slime_specs;
+// Define our slime specifications - accessible by enemy_state.cpp via extern
+std::vector<enemies::EnemyStats> slime_specs;
 
 // Internal constants for spawning
 static const float MIN_SPAWN_DISTANCE = 300.0f;
@@ -21,122 +21,68 @@ static const float MAX_SPAWN_DISTANCE = 800.0f;
 static const int SPAWN_ATTEMPTS = 10;
 
 void init_spawning() {
-    // Seed random number generator
-    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    // Clear any existing specs
+    slime_specs.clear();
+
+    // Small slime - the only slime type we're using
+    enemies::EnemyStats small_slime;
+    small_slime.id = enemies::EnemyID::FOR_SLIME;
+    small_slime.type = enemies::EnemyType::SLIME_SMALL;
+    small_slime.name = "Forest Slime";
+    small_slime.size = {32.0f, 32.0f};
+    small_slime.hp = 2;
+    small_slime.dmg = 1; // This is the intended damage value
+    small_slime.speed = 60.0f;
+    small_slime.radius = 16.0f;
+    small_slime.width = 32.0f;
+    small_slime.height = 32.0f;
+    small_slime.detection_radius = 200.0f;
+    small_slime.attack_radius = 50.0f;
+    small_slime.attack_cooldown = 1.2f;
+    small_slime.animation_frames = 2;
     
-    // Initialize slime specifications if not already done
-    if (slime_specs.empty()) {
-        // Small slime
-        {
-            enemies::EnemyStats small_slime;
-            small_slime.id = enemies::EnemyID::FOR_SLIME;
-            small_slime.type = enemies::EnemyType::SLIME_SMALL;
-            small_slime.name = "Small Slime";
-            small_slime.size = {32.0f, 32.0f};
-            small_slime.hp = 20;
-            small_slime.dmg = 5;
-            small_slime.speed = 100.0f;
-            small_slime.detection_radius = 300.0f;
-            small_slime.attack_radius = 50.0f;
-            small_slime.attack_cooldown = 2.0f;
-            
-            // Assign behaviors
-            small_slime.behavior_flags = 
-                enemies::BehaviorFlags::WANDER_NOISE |
-                enemies::BehaviorFlags::BASIC_CHASE |
-                enemies::BehaviorFlags::MELEE_ATTACK;
-                
-            slime_specs.push_back(small_slime);
-        }
+    // Set behavior flags
+    small_slime.behavior_flags = 
+        enemies::BehaviorFlags::WANDER_NOISE |
+        enemies::BehaviorFlags::BASIC_CHASE |
+        enemies::BehaviorFlags::MELEE_ATTACK |
+        enemies::BehaviorFlags::AVOID_OBSTACLES;
         
-        // Medium slime
-        {
-            enemies::EnemyStats medium_slime;
-            medium_slime.id = enemies::EnemyID::FOR_SLIME;
-            medium_slime.type = enemies::EnemyType::SLIME_MEDIUM;
-            medium_slime.name = "Medium Slime";
-            medium_slime.size = {48.0f, 48.0f};
-            medium_slime.hp = 40;
-            medium_slime.dmg = 10;
-            medium_slime.speed = 80.0f;
-            medium_slime.detection_radius = 350.0f;
-            medium_slime.attack_radius = 60.0f;
-            medium_slime.attack_cooldown = 1.8f;
-            
-            // Assign behaviors - medium slimes will strafe more
-            medium_slime.behavior_flags = 
-                enemies::BehaviorFlags::WANDER_NOISE |
-                enemies::BehaviorFlags::ADVANCED_CHASE |
-                enemies::BehaviorFlags::MELEE_ATTACK |
-                enemies::BehaviorFlags::STRAFE_TARGET;
-                
-            slime_specs.push_back(medium_slime);
-        }
-        
-        // Large slime
-        {
-            enemies::EnemyStats large_slime;
-            large_slime.id = enemies::EnemyID::FOR_SLIME;
-            large_slime.type = enemies::EnemyType::SLIME_LARGE;
-            large_slime.name = "Large Slime";
-            large_slime.size = {64.0f, 64.0f};
-            large_slime.hp = 80;
-            large_slime.dmg = 15;
-            large_slime.speed = 60.0f;
-            large_slime.detection_radius = 400.0f;
-            large_slime.attack_radius = 70.0f;
-            large_slime.attack_cooldown = 2.5f;
-            
-            // Assign behaviors - large slimes will charge
-            large_slime.behavior_flags = 
-                enemies::BehaviorFlags::WANDER_NOISE |
-                enemies::BehaviorFlags::ADVANCED_CHASE |
-                enemies::BehaviorFlags::CHARGE_DASH |
-                enemies::BehaviorFlags::MELEE_ATTACK;
-                
-            slime_specs.push_back(large_slime);
-        }
-    }
+    // Define drops
+    small_slime.drops = {
+        enemies::DropChance{enemies::DropType::Heart, 30}, 
+        enemies::DropChance{enemies::DropType::Coin, 70}
+    };
+    
+    // Add to our specifications list
+    slime_specs.push_back(small_slime);
+
+    // We no longer define medium and large slimes
 }
 
 enemies::EnemyRuntime spawn_enemy(Vector2 position, enemies::EnemyType type) {
-    // Find the spec for the requested type
-    for (const auto& spec : slime_specs) {
-        if (spec.type == type) {
-            // Create a new enemy instance with the spec
-            enemies::EnemyRuntime new_enemy(spec, position);
-            
-            // Initialize behavior-specific parameters
-            if (static_cast<int>(spec.behavior_flags & enemies::BehaviorFlags::WANDER_NOISE) != 0) {
-                new_enemy.wander_noise.radius = 200.0f;
-                new_enemy.wander_noise.sway_speed = 0.5f;
-            }
-            
-            if (static_cast<int>(spec.behavior_flags & enemies::BehaviorFlags::STRAFE_TARGET) != 0) {
-                new_enemy.strafe_target.orbit_radius = 100.0f;
-                new_enemy.strafe_target.orbit_gain = 0.7f;
-                new_enemy.strafe_target.direction = GetRandomValue(0, 1) ? 1 : -1; // Random strafe direction
-            }
-            
-            if (static_cast<int>(spec.behavior_flags & enemies::BehaviorFlags::CHARGE_DASH) != 0) {
-                new_enemy.charge_dash.charge_duration = 1.0f;
-                new_enemy.charge_dash.dash_speed = 3.0f;
-                new_enemy.charge_dash.dash_duration = 0.5f;
-            }
-            
-            if (static_cast<int>(spec.behavior_flags & enemies::BehaviorFlags::AVOID_OBSTACLES) != 0) {
-                new_enemy.avoid_obstacle.lookahead_px = 100.0f;
-                new_enemy.avoid_obstacle.avoidance_gain = 1.0f;
-            }
-            
-            TraceLog(LOG_INFO, "Spawned %s at position: (%.2f, %.2f)", spec.name.c_str(), position.x, position.y);
-            return new_enemy;
-        }
+    // We ignore the requested type and always use the small slime (index 0)
+    // This ensures we only use the small slime with dmg=1
+    
+    if (slime_specs.empty()) {
+        init_spawning();
     }
     
-    // If type not found, default to small slime
-    TraceLog(LOG_WARNING, "Enemy type not found, defaulting to small slime");
-    return spawn_enemy(position, enemies::EnemyType::SLIME_SMALL);
+    // Make sure there's a valid spawn position
+    if (position.x < 0 || position.y < 0) {
+        // Use a default position if invalid
+        position = {100.0f, 100.0f};
+    }
+    
+    // Create a new enemy instance using the constructor
+    // Always use the small slime spec (index 0) regardless of requested type
+    enemies::EnemyRuntime new_slime(slime_specs[0], position);
+    
+    // Log spawn information
+    TraceLog(LOG_INFO, "Spawned %s at position: (%.2f, %.2f)", 
+             slime_specs[0].name.c_str(), position.x, position.y);
+    
+    return new_slime;
 }
 
 void spawn_enemies_around_player(const Vector2& player_position, 
@@ -167,17 +113,8 @@ void spawn_enemies_around_player(const Vector2& player_position,
                 player_position.y + sinf(angle) * distance
             };
             
-            // Choose enemy type based on difficulty
-            enemies::EnemyType type;
-            int roll = GetRandomValue(1, 100);
-            
-            if (roll <= 10 + static_cast<int>(difficulty / 5.0f)) {
-                type = enemies::EnemyType::SLIME_LARGE;
-            } else if (roll <= 40 + static_cast<int>(difficulty / 2.0f)) {
-                type = enemies::EnemyType::SLIME_MEDIUM;
-            } else {
-                type = enemies::EnemyType::SLIME_SMALL;
-            }
+            // Always use small slimes
+            enemies::EnemyType type = enemies::EnemyType::SLIME_SMALL;
             
             // Verify spawn position is walkable
             if (world::is_walkable(spawn_pos.x, spawn_pos.y)) {

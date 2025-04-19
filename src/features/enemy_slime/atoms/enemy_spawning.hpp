@@ -4,7 +4,11 @@
 #include <vector>
 #include "../../enemies/types.hpp"
 
-namespace enemy::atoms {
+namespace enemy {
+namespace atoms {
+
+// Global slime specifications that can be accessed by other modules
+extern std::vector<enemies::EnemyStats> slime_specs;
 
 /**
  * Initialize the enemy spawning system.
@@ -39,6 +43,7 @@ void spawn_enemies_around_player(const Vector2& player_position,
  */
 void cleanup_spawning();
 
-} // namespace enemy::atoms 
+} // namespace atoms
+} // namespace enemy
 
 

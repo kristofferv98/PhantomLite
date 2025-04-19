@@ -4,7 +4,6 @@
 #include "../world/world.hpp"
 #include <cmath>
 #include <algorithm>
-#include <iostream>
 
 namespace enemies {
 

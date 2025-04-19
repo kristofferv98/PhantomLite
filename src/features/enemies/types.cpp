@@ -123,7 +123,15 @@ void EnemyRuntime::apply_steering_movement(float speed, float dt) {
     // Get direction vector from the best ray
     Vector2 move_dir = get_ray_dir(best_ray);
     
-    // Apply movement
+    // The ray direction vector should already be normalized since it's calculated using
+    // cosf/sinf of an angle, but we'll explicitly normalize it here to ensure consistent speed
+    float dir_length = sqrtf(move_dir.x * move_dir.x + move_dir.y * move_dir.y);
+    if (dir_length > 0.0f) {
+        move_dir.x /= dir_length;
+        move_dir.y /= dir_length;
+    }
+    
+    // Apply movement with normalized direction
     float adjusted_speed = speed * dt;
     position.x += move_dir.x * adjusted_speed;
     position.y += move_dir.y * adjusted_speed;

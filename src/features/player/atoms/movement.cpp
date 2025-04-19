@@ -1,6 +1,7 @@
 /// movement.cpp — implementation of movement atom
 #include "movement.hpp"
 #include <algorithm> // for std::clamp
+#include <cmath> // for sqrtf
 
 namespace player {
 namespace atoms {
@@ -17,22 +18,39 @@ void process_movement(MovementState& state, float dt) {
     // Reset movement flag
     state.is_moving = false;
     
-    // Process keyboard input
+    // Calculate movement vector based on input
+    Vector2 movement = {0.0f, 0.0f};
+    
     if (IsKeyDown(KEY_RIGHT)) {
-        state.position.x += state.speed * dt;
-        state.is_moving = true;
+        movement.x += 1.0f;
     }
     if (IsKeyDown(KEY_LEFT)) {
-        state.position.x -= state.speed * dt;
-        state.is_moving = true;
+        movement.x -= 1.0f;
     }
     if (IsKeyDown(KEY_DOWN)) {
-        state.position.y += state.speed * dt;
-        state.is_moving = true;
+        movement.y += 1.0f;
     }
     if (IsKeyDown(KEY_UP)) {
-        state.position.y -= state.speed * dt;
-        state.is_moving = true;
+        movement.y -= 1.0f;
+    }
+    
+    // Check if we're moving
+    state.is_moving = (movement.x != 0.0f || movement.y != 0.0f);
+    
+    // If moving, normalize the movement vector for consistent speed in all directions
+    if (state.is_moving) {
+        // Calculate the magnitude of the movement vector
+        float magnitude = sqrtf(movement.x * movement.x + movement.y * movement.y);
+        
+        // Normalize only if magnitude is not zero (which should never happen, but just in case)
+        if (magnitude > 0.0f) {
+            movement.x /= magnitude;
+            movement.y /= magnitude;
+            
+            // Apply normalized movement with consistent speed
+            state.position.x += movement.x * state.speed * dt;
+            state.position.y += movement.y * state.speed * dt;
+        }
     }
 }
 

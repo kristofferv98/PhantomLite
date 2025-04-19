@@ -225,18 +225,8 @@ bool apply_damage_at(const Rectangle& hit_rect, const enemies::Hit& hit) {
     
     for (auto& enemy : enemies) {
         if (CheckCollisionRecs(enemy.collision_rect, hit_rect)) {
-            // Apply the hit using the on_hit method if available
-            enemy.hp -= hit.dmg;
-            
-            // Apply knockback - use the direction from the hit
-            // This applies a force in the direction specified in the hit struct
-            enemy.knockback = hit.knockback;
-            enemy.knockback_direction = hit.direction;
-            
-            // If enemy health is <= 0, mark as inactive for cleanup
-            if (enemy.hp <= 0) {
-                enemy.active = false;
-            }
+            // Use the on_hit method to apply damage and knockback
+            enemy.on_hit(hit);
             
             any_hit = true;
         }

@@ -79,37 +79,38 @@ void update_enemy_states(float dt) {
         // Reset weights for this frame
         enemy.reset_weights();
         
-        // Reset behavior activation states
-        enemy.chase.chasing = false;
-        enemy.strafe_target.active = false;
-        
-        bool is_attacking = false;
+        bool is_steering = false;
         float dist_to_player = calculate_distance(enemy.position, player_pos);
         
-        // STATE PRIORITY ORDER:
-        // 1. Melee Attack (if in range)
-        // 2. Charge Dash (if available and close)
-        // 3. Strafe (if medium range)
-        // 4. Chase (if in detection range)
-        // 5. Wander (default)
-        
-        // Attack check
-        if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::MELEE_ATTACK) != 0) {
+        // Update attack state if already attacking
+        if (enemy.attack_melee.attacking) {
+            // If already in attack animation, continue it
+            enemy.attack_melee.attack_timer += dt;
+            
+            // Attack animation finished
+            if (enemy.attack_melee.attack_timer >= enemy.attack_melee.attack_duration) {
+                enemy.attack_melee.attacking = false;
+                // Attack cooldown was already started when attack began
+            }
+            
+            // Skip other behaviors while attacking
+            is_steering = true;
+        } 
+        // Not currently attacking, check if should start a new attack
+        else if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::MELEE_ATTACK) != 0) {
             if (dist_to_player <= enemy.spec->attack_radius) {
                 // In attack range - try to attack
                 enemies::BehaviorResult result = attack_player(enemy, dt);
                     
                 if (result != enemies::BehaviorResult::Failed) {
                     // Attack succeeded or is in progress
-                    is_attacking = true;
+                    is_steering = true;
                 }
             }
         }
         
-        // If not attacking, determine movement behaviors
-        if (!is_attacking) {
-            bool is_steering = false;
-            
+        // If not attacking or in another exclusive state, determine movement behaviors
+        if (!is_steering) {
             // Advanced chase with charge dash (if equipped)
             if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::CHARGE_DASH) != 0) {
                 if (dist_to_player <= enemy.spec->detection_radius * 0.8f && 
@@ -177,6 +178,15 @@ void update_enemy_states(float dt) {
             
             // Apply the final context steering movement
             enemies::atoms::apply_context_steering(enemy, dt);
+        }
+        
+        // Update attack cooldown timer if not already attacking
+        if (!enemy.attack_melee.attacking && !enemy.attack_melee.can_attack) {
+            enemy.attack_melee.timer += dt;
+            if (enemy.attack_melee.timer >= enemy.attack_melee.cooldown) {
+                enemy.attack_melee.timer = 0.0f;
+                enemy.attack_melee.can_attack = true;
+            }
         }
         
         // Reset enemy color if not attacking (usually red during attack)

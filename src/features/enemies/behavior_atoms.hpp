@@ -2,7 +2,10 @@
 #pragma once
 
 #include "types.hpp"
+#include "../enemy_slime/atoms/enemy_combat.hpp"
+#include "../world/world.hpp"
 #include <raylib.h>
+#include <vector>
 
 namespace enemies {
 namespace atoms {

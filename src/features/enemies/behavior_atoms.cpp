@@ -230,8 +230,32 @@ BehaviorResult attack_melee(EnemyRuntime& enemy, Vector2 target_pos, float dt) {
         // Color flash for attack
         enemy.color = RED;
         
-        // Log the attack
-        TraceLog(LOG_INFO, "Enemy performed melee attack on player");
+        // Calculate attack rectangle based on facing direction
+        Rectangle attack_rect = {
+            enemy.position.x - attack.reach/2, 
+            enemy.position.y - attack.reach/2,
+            attack.reach, 
+            attack.reach
+        };
+        
+        // Adjust rectangle based on facing direction
+        if (enemy.facing == Facing::RIGHT) {
+            attack_rect.x += attack.reach/2;
+        } else if (enemy.facing == Facing::LEFT) {
+            attack_rect.x -= attack.reach/2;
+        } else if (enemy.facing == Facing::DOWN) {
+            attack_rect.y += attack.reach/2;
+        } else if (enemy.facing == Facing::UP) {
+            attack_rect.y -= attack.reach/2;
+        }
+        
+        // Apply damage to player if in attack rectangle
+        bool hit_player = enemy::atoms::apply_player_damage(attack_rect, enemy.spec->dmg);
+        if (hit_player) {
+            TraceLog(LOG_INFO, "Enemy successfully hit player for %d damage", enemy.spec->dmg);
+        } else {
+            TraceLog(LOG_INFO, "Enemy attacked but missed player");
+        }
         
         return BehaviorResult::Running;
     }
@@ -253,6 +277,12 @@ BehaviorResult strafe_around(EnemyRuntime& enemy, Vector2 target_pos, float dt) 
     } else {
         return BehaviorResult::Failed;  // Can't strafe if at exact same position
     }
+    
+    // Mark as active for tracking and visualization
+    enemy.strafe_target.active = true;
+    
+    // Apply strafe weights - THIS WAS MISSING
+    apply_strafe_weights(enemy, target_pos, enemy.strafe_target.direction, enemy.strafe_target.orbit_gain);
     
     // Apply movement
     enemy.apply_steering_movement(dt);

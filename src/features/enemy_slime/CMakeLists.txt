@@ -1,8 +1,12 @@
 # Enemy_slime Slice CMakeLists.txt
 
-# Only include implementation files, explicitly exclude tests
-file(GLOB SRC_ENEMY 
-    atoms/*.cpp 
+# Explicitly list implementation files instead of globbing
+set(SRC_ENEMY 
+    atoms/behavior_atoms.cpp
+    atoms/enemy_state.cpp
+    atoms/enemy_spawner.cpp
+    atoms/enemy_spawning.cpp
+    atoms/enemy_renderer.cpp
     enemy_slime.cpp
 )
 

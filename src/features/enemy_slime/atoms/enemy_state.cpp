@@ -83,10 +83,9 @@ void update_enemy_states(float dt) {
             
             if (dist_to_player <= enemy.spec->attack_radius) {
                 // In attack range - try to attack
-                enemies::BehaviorResult result = 
-                    enemies::atoms::attack_melee(enemy, player_pos, dt);
+                bool attack_success = attack_player(enemy, player_pos, dt);
                     
-                if (result != enemies::BehaviorResult::Failed) {
+                if (attack_success) {
                     // Attack succeeded or is in progress, continue to next enemy
                     enemy.is_moving = (enemy.position.x != original_pos.x || 
                                      enemy.position.y != original_pos.y);

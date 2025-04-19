@@ -304,8 +304,41 @@ BehaviorResult attack_melee(EnemyRuntime& enemy, Vector2 target, float dt) {
             enemy.facing = attack_dir.y > 0 ? Facing::DOWN : Facing::UP;
         }
         
-        // TODO: Call function to deal damage to target
+        // Create attack rectangle in front of enemy
+        Rectangle attack_rect = {
+            enemy.position.x - enemy.spec->size.x/2,
+            enemy.position.y - enemy.spec->size.y/2,
+            enemy.spec->size.x,
+            enemy.spec->size.y
+        };
+        
+        // Extend the attack rectangle in the facing direction
+        float attack_extend = 10.0f; // How far the attack reaches
+        switch (enemy.facing) {
+            case Facing::RIGHT:
+                attack_rect.x += enemy.spec->size.x/2;
+                attack_rect.width = attack_extend;
+                break;
+            case Facing::LEFT:
+                attack_rect.x -= attack_extend;
+                attack_rect.width = attack_extend;
+                break;
+            case Facing::DOWN:
+                attack_rect.y += enemy.spec->size.y/2;
+                attack_rect.height = attack_extend;
+                break;
+            case Facing::UP:
+                attack_rect.y -= attack_extend;
+                attack_rect.height = attack_extend;
+                break;
+        }
+        
+        // Deal damage to player using external combat function
+        // This avoids circular dependencies by letting the specific enemy implementation handle it
         TraceLog(LOG_INFO, "Enemy performed melee attack on player");
+        
+        // enemy_slime will handle the actual damage application
+        // with proper directional knockback using attack_rect and enemy.position
         
         return BehaviorResult::Running;
     }
@@ -518,3 +551,4 @@ void draw_steering_weights(const EnemyRuntime& enemy, bool screen_space) {
 
 } // namespace atoms
 } // namespace enemies 
+

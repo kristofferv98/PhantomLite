@@ -5,6 +5,8 @@
 #include "../../world/world.hpp"
 #include "features/enemies/behavior_atoms.hpp" // Include for steering visualization
 #include <raylib.h>
+#include <raymath.h>
+#include <cmath>
 
 namespace enemy {
 namespace atoms {
@@ -15,7 +17,7 @@ static Texture2D slime_squash_texture;
 
 // Debug visualization flag
 static bool show_debug = false;
-static bool show_steering_debug = false; // New flag for steering visualization
+static bool show_steering_debug = false; // Flag for steering visualization
 
 void init_renderer() {
     // Load enemy textures
@@ -25,6 +27,95 @@ void init_renderer() {
     // Debug disabled by default
     show_debug = false;
     show_steering_debug = false;
+}
+
+// Draw the ray context steering for debugging
+void draw_steering_rays(const enemies::EnemyRuntime& enemy) {
+    // Get position in screen coordinates
+    Vector2 screen_pos = world::world_to_screen(enemy.position);
+    
+    // Find the strongest ray (most influencing direction)
+    float strongest_weight = 0;
+    int strongest_dir = -1;
+    
+    for (int i = 0; i < enemy.NUM_RAYS; i++) {
+        if (fabsf(enemy.weights[i]) > fabsf(strongest_weight)) {
+            strongest_weight = enemy.weights[i];
+            strongest_dir = i;
+        }
+    }
+    
+    // Draw each ray with color indicating its weight
+    for (int i = 0; i < enemy.NUM_RAYS; i++) {
+        float angle = i * (2.0f * PI / enemy.NUM_RAYS);
+        float cos_angle = cosf(angle);
+        float sin_angle = sinf(angle);
+        
+        // Determine color based on weight (green for positive, red for negative)
+        Color ray_color;
+        float weight_abs = fabsf(enemy.weights[i]);
+        float weight_norm = fminf(weight_abs, 1.0f); // Normalize weight for visualization
+        
+        if (enemy.weights[i] > 0) {
+            // Positive weight - green with alpha based on strength
+            ray_color = ColorAlpha(GREEN, weight_norm);
+        } else if (enemy.weights[i] < 0) {
+            // Negative weight - red with alpha based on strength
+            ray_color = ColorAlpha(RED, weight_norm);
+        } else {
+            // Zero weight - grey
+            ray_color = ColorAlpha(GRAY, 0.3f);
+        }
+        
+        // Determine ray length based on weight
+        float ray_length = 50.0f * fmaxf(weight_norm, 0.2f);
+        
+        // Create end point
+        Vector2 end_pos = {
+            screen_pos.x + cos_angle * ray_length,
+            screen_pos.y + sin_angle * ray_length
+        };
+        
+        // Draw the ray
+        DrawLineEx(screen_pos, end_pos, i == strongest_dir ? 3.0f : 1.0f, ray_color);
+        
+        // If this is the strongest ray, add a circle at the end
+        if (i == strongest_dir) {
+            DrawCircleV(end_pos, 5.0f, ray_color);
+        }
+    }
+    
+    // Draw a label showing current behaviors in effect
+    const enemies::EnemyRuntime& e = enemy;
+    
+    // Build behavior string
+    char behavior_text[128] = "";
+    bool has_behaviors = false;
+    
+    if (e.attack_melee.attacking) {
+        strcat(behavior_text, "ATTACK ");
+        has_behaviors = true;
+    }
+    if (e.chase.chasing) {
+        strcat(behavior_text, "CHASE ");
+        has_behaviors = true;
+    }
+    if (e.strafe_target.active) {
+        strcat(behavior_text, "STRAFE ");
+        has_behaviors = true;
+    }
+    if (!has_behaviors) {
+        strcat(behavior_text, "WANDER");
+    }
+    
+    // Draw the behavior text above the enemy
+    DrawText(
+        behavior_text,
+        screen_pos.x - MeasureText(behavior_text, 14) / 2,
+        screen_pos.y - 60,
+        14,
+        YELLOW
+    );
 }
 
 // PERF: ~0.2-1.0ms depending on enemy count and screen size
@@ -43,7 +134,7 @@ void render_enemies() {
         
         // Use different texture based on animation frame
         Texture2D* texture = &slime_texture;
-        if (enemy.anim_frame == 1 || enemy.attack.attacking) {
+        if (enemy.anim_frame == 1 || enemy.attack_melee.attacking) {
             texture = &slime_squash_texture;
         }
         
@@ -80,7 +171,7 @@ void render_enemies() {
             
             // Draw state information
             const char* state;
-            if (enemy.attack.attacking) {
+            if (enemy.attack_melee.attacking) {
                 state = "ATTACK";
             } else if (enemy.chase.chasing) {
                 state = "CHASE";
@@ -101,9 +192,29 @@ void render_enemies() {
                     screen_pos.y - enemy.spec->size.y - 40,
                     10, GREEN);
             
+            // Draw velocity vector
+            if (enemy.is_moving) {
+                Vector2 vel_end = {
+                    screen_pos.x + enemy.velocity.x * 0.5f, // Scale for visibility
+                    screen_pos.y + enemy.velocity.y * 0.5f
+                };
+                DrawLineEx(screen_pos, vel_end, 2.0f, GREEN);
+                DrawCircleV(vel_end, 3.0f, GREEN);
+            }
+            
+            // Draw knockback vector if active
+            if (enemy.knockback.x != 0 || enemy.knockback.y != 0) {
+                Vector2 kb_end = {
+                    screen_pos.x + enemy.knockback.x * 0.1f, // Scale for visibility
+                    screen_pos.y + enemy.knockback.y * 0.1f
+                };
+                DrawLineEx(screen_pos, kb_end, 2.0f, RED);
+                DrawCircleV(kb_end, 3.0f, RED);
+            }
+            
             // Draw steering visualization if enabled
             if (show_steering_debug) {
-                enemies::atoms::draw_steering_weights(enemy, true); // true = screen space
+                draw_steering_rays(enemy);
             }
         }
     }

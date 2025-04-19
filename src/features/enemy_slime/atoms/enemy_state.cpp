@@ -32,13 +32,13 @@ void init_enemy_state() {
     slime_spec.type = enemies::EnemyType::SLIME_SMALL;
     slime_spec.name = "Forest Slime";
     slime_spec.size = {32.0f, 32.0f};
-    slime_spec.hp = 2;
-    slime_spec.dmg = 1;
-    slime_spec.speed = 60.0f;
+    slime_spec.hp = 40;  // Increased HP for testing
+    slime_spec.dmg = 5;
+    slime_spec.speed = 100.0f;
     slime_spec.radius = 16.0f;
     slime_spec.width = 32.0f;
     slime_spec.height = 32.0f;
-    slime_spec.detection_radius = 200.0f;
+    slime_spec.detection_radius = 300.0f;
     slime_spec.attack_radius = 50.0f;
     slime_spec.attack_cooldown = 1.2f;
     slime_spec.animation_frames = 2;
@@ -48,6 +48,7 @@ void init_enemy_state() {
         enemies::BehaviorFlags::WANDER_NOISE |
         enemies::BehaviorFlags::BASIC_CHASE |
         enemies::BehaviorFlags::MELEE_ATTACK |
+        enemies::BehaviorFlags::SEPARATE_ALLIES |
         enemies::BehaviorFlags::AVOID_OBSTACLES;
         
     // Define drops
@@ -69,7 +70,7 @@ void update_enemy_states(float dt) {
     Vector2 player_pos = player::get_position();
     
     for (auto& enemy : enemies) {
-        if (!enemy.active) continue;
+        if (!enemy.active || enemy.hp <= 0) continue;
         
         // Store original position for collision resolution and movement detection
         Vector2 original_pos = enemy.position;
@@ -77,87 +78,90 @@ void update_enemy_states(float dt) {
         // Reset weights for this frame
         enemy.reset_weights();
         
+        bool is_attacking = false;
+        
         // Check if enemy has the attack behavior and is in range
         if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::MELEE_ATTACK) != 0) {
             float dist_to_player = calculate_distance(enemy.position, player_pos);
             
             if (dist_to_player <= enemy.spec->attack_radius) {
                 // In attack range - try to attack
-                enemies::BehaviorResult result = 
-                    enemies::atoms::attack_melee(enemy, player_pos, dt);
+                enemies::BehaviorResult result = attack_player(enemy, dt);
                     
                 if (result != enemies::BehaviorResult::Failed) {
-                    // Attack succeeded or is in progress, continue to next enemy
-                    enemy.is_moving = (enemy.position.x != original_pos.x || 
-                                     enemy.position.y != original_pos.y);
-                    continue;
+                    // Attack succeeded or is in progress
+                    is_attacking = true;
                 }
             }
         }
         
-        // If not attacking, determine movement behaviors
-        
-        // Chase behavior
-        if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::BASIC_CHASE) != 0) {
-            float dist_to_player = calculate_distance(enemy.position, player_pos);
-            
-            if (dist_to_player <= enemy.spec->detection_radius) {
-                // Player is within detection range - chase
-                enemies::atoms::apply_seek_weights(enemy, player_pos, 1.0f);
-            }
-        } else if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::ADVANCED_CHASE) != 0) {
-            float dist_to_player = calculate_distance(enemy.position, player_pos);
-            
-            if (dist_to_player <= enemy.spec->detection_radius) {
-                // Player is within detection range
-                if (dist_to_player > enemy.spec->attack_radius * 1.5f) {
-                    // Far enough - seek player
-                    enemies::atoms::apply_seek_weights(enemy, player_pos, 1.0f);
-                } else {
-                    // Close enough - strafe around player
-                    enemies::atoms::apply_strafe_weights(
-                        enemy, player_pos, 
-                        enemy.strafe_target.direction, 
-                        enemy.strafe_target.orbit_gain
-                    );
+        // If not attacking, determine movement behaviors 
+        if (!is_attacking) {
+            // Chase behavior
+            if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::BASIC_CHASE) != 0) {
+                float dist_to_player = calculate_distance(enemy.position, player_pos);
+                
+                if (dist_to_player <= enemy.spec->detection_radius) {
+                    // Player is within detection range - chase
+                    chase_player(enemy, dt);
+                }
+            } else if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::ADVANCED_CHASE) != 0) {
+                float dist_to_player = calculate_distance(enemy.position, player_pos);
+                
+                if (dist_to_player <= enemy.spec->detection_radius) {
+                    // Player is within detection range
+                    if (dist_to_player > enemy.spec->attack_radius * 1.5f) {
+                        // Far enough - seek player
+                        chase_player(enemy, dt);
+                    } else {
+                        // Close enough - strafe around player
+                        strafe_player(enemy, dt);
+                    }
                 }
             }
-        }
-        
-        // Wander behavior (only if not chasing)
-        if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::WANDER_NOISE) != 0) {
-            float dist_to_player = calculate_distance(enemy.position, player_pos);
             
-            if (dist_to_player > enemy.spec->detection_radius) {
-                // Not chasing player, apply wandering
-                enemies::atoms::wander_noise(enemy, dt);
+            // Strafe behavior (if not already chasing at a close distance)
+            if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::STRAFE_TARGET) != 0) {
+                float dist_to_player = calculate_distance(enemy.position, player_pos);
+                
+                if (dist_to_player <= enemy.spec->detection_radius && 
+                    dist_to_player > enemy.spec->attack_radius * 1.5f && 
+                    dist_to_player < enemy.spec->detection_radius * 0.7f) {
+                    
+                    // Close enough to strafe but not close enough to attack
+                    strafe_player(enemy, dt);
+                }
             }
+            
+            // Wander behavior (only if not chasing)
+            if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::WANDER_NOISE) != 0) {
+                float dist_to_player = calculate_distance(enemy.position, player_pos);
+                
+                // Always have some wander, but reduce influence when chasing
+                float wander_strength = (dist_to_player > enemy.spec->detection_radius) ? 1.0f : 0.3f;
+                
+                // Apply wandering with noise
+                if (wander_strength > 0.0f) {
+                    wander_noise(enemy, dt);
+                }
+            }
+            
+            // Obstacle avoidance (applied on top of other behaviors)
+            if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::AVOID_OBSTACLES) != 0) {
+                avoid_obstacles(enemy, dt);
+            }
+            
+            // Separation from other enemies
+            if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::SEPARATE_ALLIES) != 0) {
+                separate_from_allies(enemy, dt);
+            }
+            
+            // Apply the final context steering movement
+            enemies::atoms::apply_steering_movement(enemy, dt);
         }
-        
-        // Obstacle avoidance (applied on top of other behaviors)
-        if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::AVOID_OBSTACLES) != 0) {
-            enemies::atoms::apply_obstacle_avoidance_weights(
-                enemy, 
-                enemy.avoid_obstacle.lookahead_px, 
-                enemy.avoid_obstacle.avoidance_gain
-            );
-        }
-        
-        // Separation from other enemies (optional)
-        if (static_cast<int>(enemy.spec->behavior_flags & enemies::BehaviorFlags::SEPARATE_ALLIES) != 0) {
-            enemies::atoms::apply_separation_weights(
-                enemy, 
-                enemies, 
-                enemy.separate_allies.desired_spacing, 
-                enemy.separate_allies.separation_gain
-            );
-        }
-        
-        // Apply the final movement
-        enemies::atoms::apply_context_steering(enemy, dt);
         
         // Reset enemy color if not attacking (usually red during attack)
-        if (!enemy.attack.attacking) {
+        if (!enemy.attack_melee.attacking) {
             enemy.color = WHITE; // Default sprite color
         } else {
             // Use a more subtle red tint that works better with sprites
@@ -231,18 +235,47 @@ int get_active_enemy_count() {
 bool apply_damage_at(const Rectangle& hit_rect, const enemies::Hit& hit) {
     bool hit_any = false;
     
+    // Get player position for calculating knockback direction
+    Vector2 player_pos = player::get_position();
+    
     // Check each enemy for collision with the hit rectangle
     for (auto& enemy : enemies) {
         if (!enemy.active || enemy.hp <= 0) continue;
         
         // Check if hit rectangle intersects with enemy collision rectangle
         if (CheckCollisionRecs(hit_rect, enemy.collision_rect)) {
+            // Calculate knockback direction from player to enemy (more realistic)
+            Vector2 knockback_dir = {
+                enemy.position.x - player_pos.x,
+                enemy.position.y - player_pos.y
+            };
+            
+            // Normalize direction
+            float length = sqrtf(knockback_dir.x * knockback_dir.x + knockback_dir.y * knockback_dir.y);
+            if (length > 0) {
+                knockback_dir.x /= length;
+                knockback_dir.y /= length;
+            } else {
+                // If somehow at same position, knock back to the right
+                knockback_dir.x = 1.0f;
+                knockback_dir.y = 0.0f;
+            }
+            
+            // Scale knockback force based on hit strength
+            float knockback_force = 200.0f;
+            knockback_dir.x *= knockback_force;
+            knockback_dir.y *= knockback_force;
+            
+            // Create a complete hit with knockback
+            enemies::Hit full_hit = hit;
+            full_hit.knockback = knockback_dir;
+            
             // Apply hit to enemy
-            enemy.on_hit(hit);
+            enemy.on_hit(full_hit);
             hit_any = true;
             
-            // Could break here to only hit one enemy per attack
-            // But usually games allow hitting multiple enemies with one swing
+            // Log the hit for debugging
+            TraceLog(LOG_INFO, "Player hit an enemy!");
         }
     }
     

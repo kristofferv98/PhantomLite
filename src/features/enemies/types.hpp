@@ -128,11 +128,11 @@ struct EnemyStats {
 
 /// Damage application structure
 struct Hit {
-    int dmg;                                      // Damage amount
-    Vector2 knockback;                            // Knockback force
+    int dmg;                                 // Damage amount
+    Vector2 knockback = {0, 0};              // Knockback force vector
     enum class Type { 
         Melee, 
-        Arrow, 
+        Ranged,
         Fire, 
         Ice,
         Pierce,  // Added new damage type
@@ -259,10 +259,16 @@ struct EnemyRuntime {
     float anim_timer;                             // Animation timer
     int anim_frame;                               // Current animation frame
     bool is_moving;                               // Whether enemy is currently moving
+    Vector2 velocity;                             // Current velocity vector
+    Vector2 knockback;                            // Current knockback force
+    float knockback_resistance;                   // Resistance to knockback (0-1)
+    float knockback_timer = 0.0f;                 // Timer for knockback duration
+    float knockback_duration = 0.2f;              // How long knockback lasts
+    float stun_timer;                             // Time enemy is stunned from hit
     
     // NEW: 16-ray steering grid for context steering
     static constexpr int NUM_RAYS = 16;           // Rays spread every 22.5 degrees
-    std::array<float, NUM_RAYS> weights = {0};    // -1 (blocked) to 1 (desired)
+    std::array<float, NUM_RAYS> weights = {0};    // -1 (avoid) to 1 (desire)
     
     // Behavior state data (original + new)
     WanderRandom wander;                          // Original wander behavior
@@ -280,7 +286,42 @@ struct EnemyRuntime {
     AttackMelee attack_melee;                     // Melee attacks
     
     // Constructor to initialize an enemy instance
-    EnemyRuntime(const EnemyStats& spec_ref, Vector2 pos);
+    EnemyRuntime(const EnemyStats& spec_ref, Vector2 pos)
+        : spec(&spec_ref), position(pos), active(true), 
+          color(WHITE), knockback_resistance(0.3f), stun_timer(0.0f) {
+        hp = spec->hp;
+        collision_rect = { pos.x - spec->size.x/2, pos.y - spec->size.y/2, spec->size.x, spec->size.y };
+        facing = Facing::DOWN; // Default facing
+        anim_timer = 0.0f;
+        anim_frame = 0;
+        is_moving = false;
+        velocity = {0.0f, 0.0f};
+        knockback = {0.0f, 0.0f};
+        
+        // Initialize wander noise parameters
+        wander_noise.radius = 200.0f;
+        wander_noise.sway_speed = 0.5f;
+        wander_noise.spawn_point = pos; // Remember initial position
+        wander_noise.noise_offset_x = static_cast<float>(rand() % 1000) / 100.0f; // Random starting offset
+        wander_noise.noise_offset_y = static_cast<float>(rand() % 1000) / 100.0f;
+        
+        // Initialize strafe behavior
+        strafe_target.orbit_radius = 100.0f;
+        strafe_target.direction = (rand() % 2) ? 1 : -1; // Random direction
+        strafe_target.orbit_gain = 0.8f;
+        
+        // Initialize separation parameters
+        separate_allies.desired_spacing = spec->radius * 3.0f;
+        separate_allies.separation_gain = 1.2f;
+        
+        // Initialize obstacle avoidance
+        avoid_obstacle.lookahead_px = spec->radius * 4.0f;
+        avoid_obstacle.avoidance_gain = 1.5f;
+        
+        // Initialize attack parameters
+        attack_melee.cooldown = spec->attack_cooldown;
+        attack_melee.reach = spec->attack_radius * 0.8f;
+    }
     
     // NEW: Helper methods
     bool is_alive() const { return hp > 0 && active; }
@@ -300,7 +341,10 @@ struct EnemyRuntime {
     }
     
     // NEW: Apply movement based on the best available direction
-    void apply_steering_movement(float speed, float dt);
+    void apply_steering_movement(float dt);
+
+    // Helper method for smooth deceleration
+    float approach(float current, float target, float amount);
 };
 
 /// Spawn request data from the level loader

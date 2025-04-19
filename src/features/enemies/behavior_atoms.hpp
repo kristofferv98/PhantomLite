@@ -57,8 +57,14 @@ void apply_strafe_weights(EnemyRuntime& enemy, Vector2 target, int direction, fl
 /// Apply weights for separation from other entities
 void apply_separation_weights(EnemyRuntime& enemy, const std::vector<EnemyRuntime>& enemies, float desired_dist, float gain = 1.0f);
 
-/// Apply weights to avoid obstacles using raycasts
+/// Apply weights for obstacle avoidance using raycasts
 void apply_obstacle_avoidance_weights(EnemyRuntime& enemy, float lookahead_dist, float gain = 1.0f);
+
+/// Apply weights for a specific direction vector
+void apply_direction_weights(EnemyRuntime& enemy, Vector2 direction, float gain = 1.0f);
+
+// Helper for context steering
+void apply_steering_movement(EnemyRuntime& enemy, float dt);
 
 } // namespace atoms
 } // namespace enemies 

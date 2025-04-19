@@ -2,11 +2,16 @@
 
 #include "behavior_atoms.hpp"
 #include "../world/world.hpp"
+#include "shared/opensimplex2/opensimplex2.h"
 #include <algorithm>
 #include <cmath>
 
 namespace enemies {
 namespace atoms {
+
+// Use OpenSimplex2 for natural noise-based wandering
+static opensimplex2::Noise noise(42); // Initialize with fixed seed
+static bool noise_initialized = true;
 
 // Utility functions for vector operations
 namespace {
@@ -50,187 +55,327 @@ namespace {
     }
 }
 
-// Wander using noise for smooth paths
+// Context Steering Implementation
+BehaviorResult apply_context_steering(EnemyRuntime& enemy, float dt) {
+    // Find best direction from weights
+    int best_ray = 0;
+    float best_weight = -999.0f;
+    
+    for (int i = 0; i < enemy.NUM_RAYS; i++) {
+        if (enemy.weights[i] > best_weight) {
+            best_weight = enemy.weights[i];
+            best_ray = i;
+        }
+    }
+    
+    // If all directions are blocked or have negative weights, don't move
+    if (best_weight < 0.0f) {
+        enemy.is_moving = false;
+        return BehaviorResult::Failed;
+    }
+    
+    // Handle movement using the enemy's own method
+    enemy.apply_steering_movement(dt);
+    
+    return BehaviorResult::Running;
+}
+
+// Wander implementation
 BehaviorResult wander_noise(EnemyRuntime& enemy, float dt) {
-    auto& wander = enemy.wander_noise;
+    // Update noise sampling position
+    enemy.wander_noise.noise_offset_x += dt * enemy.wander_noise.sway_speed;
+    enemy.wander_noise.noise_offset_y += dt * enemy.wander_noise.sway_speed * 0.7f;
     
-    // Update noise offsets
-    wander.noise_offset_x += wander.sway_speed * dt;
-    wander.noise_offset_y += wander.sway_speed * dt * 1.3f; // Different rate for variety
+    // Sample 2D noise for direction
+    float angle_offset = noise.noise2(
+        enemy.wander_noise.noise_offset_x, 
+        enemy.wander_noise.noise_offset_y + 500.0f, // offset for different sampling
+        3, 0.5f) * PI; // -π to π range for angle offset
     
-    // Reset weights array
-    enemy.reset_weights();
+    // Calculate direction vector from noise
+    float dir_x = cosf(angle_offset);
+    float dir_y = sinf(angle_offset);
+    Vector2 wander_dir = { dir_x, dir_y };
     
-    // Calculate wander target based on noise
-    float noise_val_x = simple_noise(wander.noise_offset_x, 0.0f) * 2.0f - 1.0f; // -1 to 1
-    float noise_val_y = simple_noise(0.0f, wander.noise_offset_y) * 2.0f - 1.0f; // -1 to 1
-    
-    // Generate target position from noise
-    Vector2 wander_target = {
-        wander.spawn_point.x + noise_val_x * wander.radius,
-        wander.spawn_point.y + noise_val_y * wander.radius
+    // Get distance from spawn point
+    Vector2 to_spawn = {
+        enemy.wander_noise.spawn_point.x - enemy.position.x,
+        enemy.wander_noise.spawn_point.y - enemy.position.y
     };
+    float dist_to_spawn = sqrtf(to_spawn.x * to_spawn.x + to_spawn.y * to_spawn.y);
     
-    // Apply seeking behavior toward the wander target
-    apply_seek_weights(enemy, wander_target, 0.8f); // Lower gain for gentler wandering
+    // If too far from spawn point, blend in a return vector
+    if (dist_to_spawn > enemy.wander_noise.radius) {
+        // Normalize to_spawn
+        float spawn_length = sqrtf(to_spawn.x * to_spawn.x + to_spawn.y * to_spawn.y);
+        if (spawn_length > 0) {
+            to_spawn.x /= spawn_length;
+            to_spawn.y /= spawn_length;
+        }
+        
+        // Blend based on how far beyond radius
+        float blend = fminf((dist_to_spawn - enemy.wander_noise.radius) / 50.0f, 1.0f);
+        wander_dir.x = wander_dir.x * (1.0f - blend) + to_spawn.x * blend;
+        wander_dir.y = wander_dir.y * (1.0f - blend) + to_spawn.y * blend;
+    }
     
-    // Apply the steering movement
-    enemy.apply_steering_movement(enemy.spec->speed, dt);
+    // Apply weights to all rays, with highest weight in the wander direction
+    for (int i = 0; i < enemy.NUM_RAYS; i++) {
+        float ray_angle = i * (2.0f * PI / enemy.NUM_RAYS);
+        
+        // Calculate angle difference (normalized between -PI and PI)
+        float angle_diff = ray_angle - atan2f(wander_dir.y, wander_dir.x);
+        while (angle_diff > PI) angle_diff -= 2.0f * PI;
+        while (angle_diff < -PI) angle_diff += 2.0f * PI;
+        
+        // Convert angle difference to a weight (1.0 = perfect match, 0.0 = opposite direction)
+        float weight = cosf(angle_diff);
+        
+        // Apply weight multiplier and scaling
+        weight = weight * 0.5f; // Lower priority for wandering
+        
+        // Add to the ray's weight
+        enemy.weights[i] += weight;
+    }
     
-    return BehaviorResult::Running; // Wandering is ongoing
+    return BehaviorResult::Running;
+}
+
+// Chase implementation
+BehaviorResult chase_direct(EnemyRuntime& enemy, float dt) {
+    // Exit if not in chase state
+    if (!enemy.chase.chasing) {
+        return BehaviorResult::Failed;
+    }
+    
+    // Apply movement toward target
+    enemy.apply_steering_movement(dt);
+    
+    return BehaviorResult::Running;
+}
+
+// Attack implementation
+BehaviorResult attack_melee(EnemyRuntime& enemy, Vector2 target_pos, float dt) {
+    // Access melee attack state
+    auto& attack = enemy.attack_melee;
+    
+    // Check if attack is on cooldown
+    if (!attack.can_attack) {
+        attack.timer += dt;
+        if (attack.timer >= attack.cooldown) {
+            attack.timer = 0;
+            attack.can_attack = true;
+        }
+        return BehaviorResult::Failed;
+    }
+    
+    // Calculate distance to target
+    float dx = target_pos.x - enemy.position.x;
+    float dy = target_pos.y - enemy.position.y;
+    float dist = sqrtf(dx * dx + dy * dy);
+    
+    // If in range, perform attack
+    if (dist <= attack.reach) {
+        // Start attack
+        attack.attacking = true;
+        attack.can_attack = false;
+        attack.timer = 0;
+        attack.attack_timer = 0;
+        
+        // Face toward target
+        if (fabsf(dx) > fabsf(dy)) {
+            enemy.facing = (dx > 0) ? Facing::RIGHT : Facing::LEFT;
+        } else {
+            enemy.facing = (dy > 0) ? Facing::DOWN : Facing::UP;
+        }
+        
+        // Color flash for attack
+        enemy.color = RED;
+        
+        // Log the attack
+        TraceLog(LOG_INFO, "Enemy performed melee attack on player");
+        
+        return BehaviorResult::Running;
+    }
+    
+    return BehaviorResult::Failed;
+}
+
+// Strafe implementation
+BehaviorResult strafe_around(EnemyRuntime& enemy, Vector2 target_pos, float dt) {
+    // Calculate vector to target
+    float dx = target_pos.x - enemy.position.x;
+    float dy = target_pos.y - enemy.position.y;
+    float dist = sqrtf(dx * dx + dy * dy);
+    
+    // Normalize if not zero
+    if (dist > 0) {
+        dx /= dist;
+        dy /= dist;
+    } else {
+        return BehaviorResult::Failed;  // Can't strafe if at exact same position
+    }
+    
+    // Apply movement
+    enemy.apply_steering_movement(dt);
+    
+    return BehaviorResult::Running;
+}
+
+// Charge dash implementation
+BehaviorResult charge_dash(EnemyRuntime& enemy, Vector2 target_pos, float dt) {
+    auto& dash = enemy.charge_dash;
+    
+    // State machine for dash behavior
+    switch (dash.state) {
+        case ChargeDash::State::Idle: {
+            // Start charging
+            dash.state = ChargeDash::State::Charging;
+            dash.charge_timer = 0;
+            
+            // Store direction toward target
+            float dx = target_pos.x - enemy.position.x;
+            float dy = target_pos.y - enemy.position.y;
+            float dist = sqrtf(dx * dx + dy * dy);
+            
+            if (dist > 0) {
+                dash.dash_direction.x = dx / dist;
+                dash.dash_direction.y = dy / dist;
+            } else {
+                // Default to right if somehow at exact target position
+                dash.dash_direction.x = 1.0f;
+                dash.dash_direction.y = 0.0f;
+            }
+            
+            // Visual feedback for charging
+            enemy.color = YELLOW;
+            
+            break;
+        }
+        
+        case ChargeDash::State::Charging: {
+            // Update charge timer
+            dash.charge_timer += dt;
+            
+            // Flash color more intensely as charge builds
+            float intensity = 0.5f + 0.5f * (dash.charge_timer / dash.charge_duration);
+            enemy.color = (Color){
+                (unsigned char)(255 * intensity),
+                (unsigned char)(255 * 0.5f * intensity),
+                0,
+                255
+            };
+            
+            // When charged, start dash
+            if (dash.charge_timer >= dash.charge_duration) {
+                dash.state = ChargeDash::State::Dashing;
+                dash.dash_timer = 0;
+                
+                // Visual feedback for dash
+                enemy.color = RED;
+            }
+            break;
+        }
+        
+        case ChargeDash::State::Dashing: {
+            // Update dash timer
+            dash.dash_timer += dt;
+            
+            // Apply movement in dash direction
+            float dash_speed = enemy.spec->speed * dash.dash_speed;
+            enemy.position.x += dash.dash_direction.x * dash_speed * dt;
+            enemy.position.y += dash.dash_direction.y * dash_speed * dt;
+            
+            // Update facing direction
+            if (fabsf(dash.dash_direction.x) > fabsf(dash.dash_direction.y)) {
+                enemy.facing = (dash.dash_direction.x > 0) ? Facing::RIGHT : Facing::LEFT;
+            } else {
+                enemy.facing = (dash.dash_direction.y > 0) ? Facing::DOWN : Facing::UP;
+            }
+            
+            // When dash complete, go to cooldown
+            if (dash.dash_timer >= dash.dash_duration) {
+                dash.state = ChargeDash::State::Cooldown;
+                dash.cooldown_timer = 0;
+                
+                // Reset color
+                enemy.color = WHITE;
+            }
+            break;
+        }
+        
+        case ChargeDash::State::Cooldown: {
+            // Update cooldown timer
+            dash.cooldown_timer += dt;
+            
+            // When cooldown complete, return to idle
+            if (dash.cooldown_timer >= dash.cooldown_duration) {
+                dash.state = ChargeDash::State::Idle;
+                return BehaviorResult::Completed;
+            }
+            break;
+        }
+    }
+    
+    return BehaviorResult::Running;
 }
 
 // Seek toward a target position
 BehaviorResult seek_target(EnemyRuntime& enemy, Vector2 target, float dt) {
-    auto& seek = enemy.seek_target;
-    float dist = distance(enemy.position, target);
+    // Calculate direction to target
+    Vector2 dir = direction_to(enemy.position, target);
+    float dist = sqrtf(dir.x * dir.x + dir.y * dir.y);
     
-    // If we've reached our preferred distance, we're done
-    if (fabsf(dist - seek.preferred_dist) < 5.0f) {
-        seek.active = false;
-        return BehaviorResult::Completed;
+    // Normalize direction
+    if (dist > 0) {
+        dir.x /= dist;
+        dir.y /= dist;
     }
     
-    // Still need to seek
-    seek.active = true;
-    
-    // Reset weights
-    enemy.reset_weights();
-    
-    // Apply seeking behavior
-    apply_seek_weights(enemy, target, seek.seek_gain);
+    // Apply weights based on seek direction
+    apply_seek_weights(enemy, target, 1.0f);
     
     // Apply movement
-    enemy.apply_steering_movement(enemy.spec->speed, dt);
+    enemy.apply_steering_movement(dt);
     
     return BehaviorResult::Running;
 }
 
 // Strafe/orbit around a target position
 BehaviorResult strafe_target(EnemyRuntime& enemy, Vector2 target, float dt) {
-    auto& strafe = enemy.strafe_target;
-    float dist = distance(enemy.position, target);
+    // Calculate direction to target
+    Vector2 dir = direction_to(enemy.position, target);
+    float dist = sqrtf(dir.x * dir.x + dir.y * dir.y);
     
-    // Set active flag
-    strafe.active = true;
-    
-    // Reset weights
-    enemy.reset_weights();
-    
-    // First, maintain proper orbit distance
-    float orbit_diff = dist - strafe.orbit_radius;
-    if (fabsf(orbit_diff) > 10.0f) {
-        // Need to move closer/further to maintain orbit radius
-        float seek_gain = orbit_diff > 0 ? -0.5f : 0.5f; // Move away or toward
-        apply_seek_weights(enemy, target, seek_gain);
-    }
-    
-    // Apply strafing weights
-    apply_strafe_weights(enemy, target, strafe.direction, strafe.orbit_gain);
+    // Apply strafe weights
+    apply_strafe_weights(enemy, target, enemy.strafe_target.direction, 1.0f);
     
     // Apply movement
-    enemy.apply_steering_movement(enemy.spec->speed, dt);
+    enemy.apply_steering_movement(dt);
     
-    return BehaviorResult::Running; // Strafing is ongoing
+    return BehaviorResult::Running;
 }
 
 // Maintain distance from other enemies
 BehaviorResult separate_allies(EnemyRuntime& enemy, const std::vector<EnemyRuntime>& enemies, float dt) {
-    auto& separate = enemy.separate_allies;
-    
-    // Reset weights
-    enemy.reset_weights();
-    
     // Apply separation weights
-    apply_separation_weights(enemy, enemies, separate.desired_spacing, separate.separation_gain);
+    apply_separation_weights(enemy, enemies, enemy.separate_allies.desired_spacing, 1.0f);
     
     // Apply movement
-    enemy.apply_steering_movement(enemy.spec->speed, dt);
+    enemy.apply_steering_movement(dt);
     
-    return BehaviorResult::Running; // Separation is ongoing
+    return BehaviorResult::Running;
 }
 
 // Avoid obstacles using raycasts
 BehaviorResult avoid_obstacles(EnemyRuntime& enemy, float dt) {
-    auto& avoid = enemy.avoid_obstacle;
-    
-    // We don't reset weights here, so this can be combined with other behaviors
-    
     // Apply obstacle avoidance weights
-    apply_obstacle_avoidance_weights(enemy, avoid.lookahead_px, avoid.avoidance_gain);
+    apply_obstacle_avoidance_weights(enemy, enemy.avoid_obstacle.lookahead_px, 1.0f);
     
     // Apply movement
-    enemy.apply_steering_movement(enemy.spec->speed, dt);
+    enemy.apply_steering_movement(dt);
     
-    return BehaviorResult::Running; // Avoidance is ongoing
-}
-
-// Apply a charge and dash attack
-BehaviorResult charge_dash(EnemyRuntime& enemy, Vector2 target, float dt) {
-    auto& dash = enemy.charge_dash;
-    
-    // State machine for charge-dash behavior
-    switch (dash.state) {
-        case ChargeDash::State::Idle:
-            // Begin charging
-            dash.state = ChargeDash::State::Charging;
-            dash.charge_timer = 0.0f;
-            // Set dash direction toward target
-            dash.dash_direction = normalize(direction_to(enemy.position, target));
-            return BehaviorResult::Running;
-            
-        case ChargeDash::State::Charging:
-            // Update charge timer
-            dash.charge_timer += dt;
-            if (dash.charge_timer >= dash.charge_duration) {
-                // Done charging, start dash
-                dash.state = ChargeDash::State::Dashing;
-                dash.dash_timer = 0.0f;
-            }
-            return BehaviorResult::Running;
-            
-        case ChargeDash::State::Dashing:
-            // Update dash timer
-            dash.dash_timer += dt;
-            
-            // Apply dash movement
-            enemy.position.x += dash.dash_direction.x * enemy.spec->speed * dash.dash_speed * dt;
-            enemy.position.y += dash.dash_direction.y * enemy.spec->speed * dash.dash_speed * dt;
-            
-            // Update collision rectangle
-            enemy.collision_rect.x = enemy.position.x - enemy.spec->size.x/2;
-            enemy.collision_rect.y = enemy.position.y - enemy.spec->size.y/2;
-            
-            // Set facing direction based on dash direction
-            if (fabsf(dash.dash_direction.x) > fabsf(dash.dash_direction.y)) {
-                enemy.facing = dash.dash_direction.x > 0 ? Facing::RIGHT : Facing::LEFT;
-            } else {
-                enemy.facing = dash.dash_direction.y > 0 ? Facing::DOWN : Facing::UP;
-            }
-            
-            // Check if dash is complete
-            if (dash.dash_timer >= dash.dash_duration) {
-                // Done dashing, enter cooldown
-                dash.state = ChargeDash::State::Cooldown;
-                dash.cooldown_timer = 0.0f;
-            }
-            
-            // We're moving
-            enemy.is_moving = true;
-            return BehaviorResult::Running;
-            
-        case ChargeDash::State::Cooldown:
-            // Update cooldown timer
-            dash.cooldown_timer += dt;
-            if (dash.cooldown_timer >= dash.cooldown_duration) {
-                // Cooldown complete, reset to idle
-                dash.state = ChargeDash::State::Idle;
-                return BehaviorResult::Completed;
-            }
-            return BehaviorResult::Running;
-    }
-    
-    return BehaviorResult::Failed; // Should never get here
+    return BehaviorResult::Running;
 }
 
 // Apply a ranged attack
@@ -263,98 +408,6 @@ BehaviorResult ranged_shoot(EnemyRuntime& enemy, Vector2 target, float dt) {
     }
     
     return BehaviorResult::Failed; // Can't fire yet
-}
-
-// Apply a melee attack
-BehaviorResult attack_melee(EnemyRuntime& enemy, Vector2 target, float dt) {
-    auto& melee = enemy.attack_melee;
-    
-    // Update timer if on cooldown
-    if (!melee.can_attack) {
-        melee.timer += dt;
-        if (melee.timer >= melee.cooldown) {
-            melee.can_attack = true;
-            melee.timer = 0.0f;
-        }
-    }
-    
-    // Update attack animation if attacking
-    if (melee.attacking) {
-        melee.attack_timer += dt;
-        if (melee.attack_timer >= melee.attack_duration) {
-            melee.attacking = false;
-            return BehaviorResult::Completed;
-        }
-        return BehaviorResult::Running;
-    }
-    
-    // Check if we can attack and if target is in range
-    float dist = distance(enemy.position, target);
-    if (melee.can_attack && dist <= melee.reach) {
-        // Start attack
-        melee.attacking = true;
-        melee.can_attack = false;
-        melee.attack_timer = 0.0f;
-        
-        // Calculate direction to target and set facing
-        Vector2 attack_dir = normalize(direction_to(enemy.position, target));
-        if (fabsf(attack_dir.x) > fabsf(attack_dir.y)) {
-            enemy.facing = attack_dir.x > 0 ? Facing::RIGHT : Facing::LEFT;
-        } else {
-            enemy.facing = attack_dir.y > 0 ? Facing::DOWN : Facing::UP;
-        }
-        
-        // TODO: Call function to deal damage to target
-        TraceLog(LOG_INFO, "Enemy performed melee attack on player");
-        
-        return BehaviorResult::Running;
-    }
-    
-    return BehaviorResult::Failed; // Can't attack yet or target not in range
-}
-
-// Process the steering weights and apply movement
-BehaviorResult apply_context_steering(EnemyRuntime& enemy, float dt) {
-    // Find best direction from weights
-    int best_ray = 0;
-    float best_weight = -999.0f;
-    
-    for (int i = 0; i < enemy.NUM_RAYS; i++) {
-        if (enemy.weights[i] > best_weight && enemy.weights[i] >= 0) {
-            best_weight = enemy.weights[i];
-            best_ray = i;
-        }
-    }
-    
-    // If all directions are blocked or have negative weights, don't move
-    if (best_weight < 0.0f) {
-        enemy.is_moving = false;
-        return BehaviorResult::Failed;
-    }
-    
-    // Get direction vector from the best ray
-    Vector2 move_dir = enemy.get_ray_dir(best_ray);
-    
-    // Apply movement
-    float adjusted_speed = enemy.spec->speed * dt;
-    enemy.position.x += move_dir.x * adjusted_speed;
-    enemy.position.y += move_dir.y * adjusted_speed;
-    
-    // Update collision rectangle
-    enemy.collision_rect.x = enemy.position.x - enemy.spec->size.x/2;
-    enemy.collision_rect.y = enemy.position.y - enemy.spec->size.y/2;
-    
-    // Update facing direction based on movement
-    if (fabsf(move_dir.x) > fabsf(move_dir.y)) {
-        enemy.facing = move_dir.x > 0 ? Facing::RIGHT : Facing::LEFT;
-    } else {
-        enemy.facing = move_dir.y > 0 ? Facing::DOWN : Facing::UP;
-    }
-    
-    // We moved this frame
-    enemy.is_moving = true;
-    
-    return BehaviorResult::Running;
 }
 
 // Helper functions for weight calculations
@@ -468,6 +521,29 @@ void apply_obstacle_avoidance_weights(EnemyRuntime& enemy, float lookahead_dist,
     }
 }
 
+// Helper for context steering
+void apply_steering_movement(EnemyRuntime& enemy, float dt) {
+    // Find best direction from weights
+    int best_ray = 0;
+    float best_weight = -999.0f;
+    
+    for (int i = 0; i < enemy.NUM_RAYS; i++) {
+        if (enemy.weights[i] > best_weight) {
+            best_weight = enemy.weights[i];
+            best_ray = i;
+        }
+    }
+    
+    // If all directions are blocked or have negative weights, don't move
+    if (best_weight < 0.0f) {
+        enemy.is_moving = false;
+        return;
+    }
+    
+    // Call the enemy's own method to apply the movement
+    enemy.apply_steering_movement(dt);
+}
+
 // Debug visualization for steering weights
 void draw_steering_weights(const EnemyRuntime& enemy, bool screen_space) {
     Vector2 base_pos = enemy.position;
@@ -514,6 +590,30 @@ void draw_steering_weights(const EnemyRuntime& enemy, bool screen_space) {
     
     // Draw circle at position for reference
     DrawCircleV(base_pos, 5.0f, WHITE);
+}
+
+// Apply weights for a specific direction
+void apply_direction_weights(EnemyRuntime& enemy, Vector2 direction, float gain) {
+    // Normalize direction
+    float len = sqrtf(direction.x * direction.x + direction.y * direction.y);
+    if (len > 0) {
+        direction.x /= len;
+        direction.y /= len;
+    } else {
+        // Default to upward if no direction provided
+        direction.y = -1.0f;
+    }
+    
+    // Apply weights based on alignment with direction
+    for (int i = 0; i < enemy.NUM_RAYS; i++) {
+        Vector2 ray_dir = enemy.get_ray_dir(i);
+        
+        // Calculate dot product to determine alignment
+        float dot = ray_dir.x * direction.x + ray_dir.y * direction.y;
+        
+        // Apply weight based on alignment (1.0 for perfect alignment, -1.0 for opposite)
+        enemy.weights[i] += dot * gain;
+    }
 }
 
 } // namespace atoms

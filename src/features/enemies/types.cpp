@@ -1,96 +1,47 @@
-/// types.cpp — Implementation of common enemy data structures
+/// types.cpp — Implementation of enemy types and runtime state
 
 #include "types.hpp"
 #include "../world/world.hpp"
 #include <cmath>
 #include <algorithm>
+#include <iostream>
 
 namespace enemies {
 
-// Constructor implementation for EnemyRuntime
-EnemyRuntime::EnemyRuntime(const EnemyStats& spec_ref, Vector2 pos)
-    : spec(&spec_ref), 
-      position(pos), 
-      hp(spec_ref.hp), 
-      collision_rect({pos.x - spec_ref.size.x/2, pos.y - spec_ref.size.y/2, spec_ref.size.x, spec_ref.size.y}),
-      color(GREEN),
-      facing(Facing::DOWN),
-      active(true),
-      anim_timer(0.0f),
-      anim_frame(0),
-      is_moving(false) {
-    
-    // Initialize chase parameters with values from spec
-    chase.detection_radius = spec_ref.detection_radius;
-    chase.chasing = false;
-    
-    // Initialize attack parameters with values from spec
-    attack.attack_radius = spec_ref.attack_radius;
-    attack.cooldown = spec_ref.attack_cooldown;
-    attack.timer = 0.0f;
-    attack.can_attack = true;
-    attack.attacking = false;
-    
-    // Initialize melee attack parameters
-    attack_melee.reach = spec_ref.attack_radius;
-    attack_melee.cooldown = spec_ref.attack_cooldown;
-    
-    // Initialize new noise-based wander
-    wander_noise.spawn_point = pos;
-    
-    // Initialize with random noise offsets
-    wander_noise.noise_offset_x = static_cast<float>(rand()) / RAND_MAX * 1000.0f;
-    wander_noise.noise_offset_y = static_cast<float>(rand()) / RAND_MAX * 1000.0f;
-    
-    // Initialize weights array to zeros
-    reset_weights();
-}
-
-// Handle being hit by an attack
+// EnemyRuntime implementation
 void EnemyRuntime::on_hit(const Hit& hit) {
-    // Early exit if already dead
-    if (!is_alive()) return;
+    // Don't apply damage if already at 0 HP
+    if (hp <= 0) return;
     
     // Apply damage
     hp -= hit.dmg;
     
-    // Apply knockback if any
-    if (hit.knockback.x != 0 || hit.knockback.y != 0) {
-        // Simple knockback - could be more complex with physics
-        position.x += hit.knockback.x * 10.0f;
-        position.y += hit.knockback.y * 10.0f;
+    // Flash red to indicate damage
+    color = RED; // Set color to red temporarily
+    
+    // Apply knockback
+    if (hp > 0 && (hit.knockback.x != 0 || hit.knockback.y != 0)) {
+        // Use the knockback vector from the hit
+        knockback = hit.knockback;
         
-        // Update collision rectangle
-        collision_rect.x = position.x - spec->size.x/2;
-        collision_rect.y = position.y - spec->size.y/2;
-    }
-    
-    // Flash color to indicate hit
-    color = RED;
-    
-    // TODO: Special reactions based on hit type
-    switch (hit.type) {
-        case Hit::Type::Pierce:
-            // Pierce might ignore armor or do more damage
-            break;
-            
-        case Hit::Type::Magic:
-            // Magic might have special effects
-            break;
-            
-        default:
-            break;
-    }
-    
-    // Check if dead
-    if (hp <= 0) {
-        // Mark as inactive
-        active = false;
+        // Apply knockback based on enemy's resistance
+        knockback.x *= (1.0f - knockback_resistance);
+        knockback.y *= (1.0f - knockback_resistance);
+        
+        // Set knockback recovery timer
+        knockback_timer = knockback_duration;
     }
 }
 
-// Apply movement based on steering weights
-void EnemyRuntime::apply_steering_movement(float speed, float dt) {
+float EnemyRuntime::approach(float current, float target, float amount) {
+    if (current < target) {
+        return std::min(current + amount, target);
+    } else {
+        return std::max(current - amount, target);
+    }
+}
+
+void EnemyRuntime::apply_steering_movement(float dt) {
     // Find best direction from weights
     int best_ray = 0;
     float best_weight = -999.0f;
@@ -109,26 +60,56 @@ void EnemyRuntime::apply_steering_movement(float speed, float dt) {
     }
     
     // Get direction vector from the best ray
-    Vector2 move_dir = get_ray_dir(best_ray);
+    float ray_angle = best_ray * (2.0f * PI / NUM_RAYS);
+    Vector2 move_dir = {
+        cosf(ray_angle),
+        sinf(ray_angle)
+    };
     
-    // Apply movement
-    float adjusted_speed = speed * dt;
-    position.x += move_dir.x * adjusted_speed;
-    position.y += move_dir.y * adjusted_speed;
+    // Set the target velocity based on the ray direction
+    Vector2 target_velocity = {
+        move_dir.x * spec->speed,
+        move_dir.y * spec->speed
+    };
+    
+    // Smoothly approach the target velocity
+    const float acceleration = spec->speed * 4.0f; // Faster acceleration
+    velocity.x = approach(velocity.x, target_velocity.x, acceleration * dt);
+    velocity.y = approach(velocity.y, target_velocity.y, acceleration * dt);
+    
+    // Apply knockback (if active)
+    if (knockback_timer > 0) {
+        knockback_timer -= dt;
+        
+        // Reduce knockback over time
+        float knockback_factor = knockback_timer / knockback_duration;
+        position.x += knockback.x * knockback_factor * dt;
+        position.y += knockback.y * knockback_factor * dt;
+        
+        // If knockback is still strong, reduce regular movement
+        if (knockback_factor > 0.5f) {
+            velocity.x *= 0.5f;
+            velocity.y *= 0.5f;
+        }
+    }
+    
+    // Apply velocity to position
+    position.x += velocity.x * dt;
+    position.y += velocity.y * dt;
     
     // Update collision rectangle
     collision_rect.x = position.x - spec->size.x/2;
     collision_rect.y = position.y - spec->size.y/2;
     
     // Update facing direction based on movement
-    if (fabsf(move_dir.x) > fabsf(move_dir.y)) {
-        facing = move_dir.x > 0 ? Facing::RIGHT : Facing::LEFT;
-    } else {
-        facing = move_dir.y > 0 ? Facing::DOWN : Facing::UP;
+    if (fabsf(velocity.x) > fabsf(velocity.y) && fabsf(velocity.x) > 5.0f) {
+        facing = velocity.x > 0 ? Facing::RIGHT : Facing::LEFT;
+    } else if (fabsf(velocity.y) > 5.0f) {
+        facing = velocity.y > 0 ? Facing::DOWN : Facing::UP;
     }
     
     // We moved this frame
-    is_moving = true;
+    is_moving = (fabsf(velocity.x) > 5.0f || fabsf(velocity.y) > 5.0f);
 }
 
 } // namespace enemies 
